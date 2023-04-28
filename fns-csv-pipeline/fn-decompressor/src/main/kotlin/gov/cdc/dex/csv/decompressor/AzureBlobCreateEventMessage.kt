@@ -1,4 +1,4 @@
-package gov.cdc.dex.csv.debatcher
+package gov.cdc.dex.csv.decompressor
 
 import com.google.gson.annotations.SerializedName
 
