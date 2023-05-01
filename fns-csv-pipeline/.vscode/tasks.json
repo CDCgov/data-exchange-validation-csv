@@ -8,7 +8,7 @@
 			"problemMatcher": "$func-java-watch",
 			"isBackground": true,
 			"options": {
-				"cwd": "${workspaceFolder}/fn-decompressor/target/azure-functions/dex-csv-fn-app"
+				"cwd": "${workspaceFolder}/target/azure-functions/dex-csv-fn-app"
 			},
 			"dependsOn": "package (functions)"
 		},
@@ -19,9 +19,6 @@
 			"group": {
 				"kind": "build",
 				"isDefault": true
-			},
-			"options": {
-				"cwd": "${workspaceFolder}/fn-decompressor"
 			}
 		}
 	]

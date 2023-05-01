@@ -1,4 +1,4 @@
-package gov.cdc.dex.csv.decompressor
+package gov.cdc.dex.csv.functions
 
 import com.microsoft.azure.functions.ExecutionContext
 import java.util.logging.Logger;
@@ -8,15 +8,19 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mockito
 import org.mockito.invocation.InvocationOnMock;
 
+import gov.cdc.dex.csv.services.BlobService
+
 internal class Unit_FnDecompressor {
 
-    private val testFnDebatcher : FnDecompressor = FnDecompressor();
-    private val context : ExecutionContext = Mockito.mock(ExecutionContext::class.java);
+    private val mockBlobService : BlobService = Mockito.mock(BlobService::class.java);
+    private val mockContext : ExecutionContext = Mockito.mock(ExecutionContext::class.java);
     private val logger : Logger = Mockito.mock(Logger::class.java);
 
+    private val testFnDebatcher : FnDecompressor = FnDecompressor(mockBlobService);
+
     @BeforeEach
-    internal fun initiateMocks(){
-        Mockito.`when`(context.logger).thenReturn(logger)
+    fun initiateMocks(){
+        Mockito.`when`(mockContext.logger).thenReturn(logger)
         Mockito.`when`(logger.info(Mockito.anyString())).thenAnswer(this::loggerInvocation)
     }
 
@@ -39,27 +43,27 @@ internal class Unit_FnDecompressor {
     @Test
     internal fun negative_message_empty(){
         Assertions.assertThrows(IllegalArgumentException::class.java) {
-            testFnDebatcher.eventHubProcessor("",context);
+            testFnDebatcher.process("",mockContext);
         }
     }
 
     @Test
     internal fun negative_message_badFormat(){
         Assertions.assertThrows(com.google.gson.JsonSyntaxException::class.java) {
-            testFnDebatcher.eventHubProcessor("][",context);
+            testFnDebatcher.process("][",mockContext);
         }
     }
 
     @Test
     internal fun negative_message_missingType(){
-        testFnDebatcher.eventHubProcessor("[[{\"id\":\"DUMMY_ID\",\"data\":{\"url\":\"DUMMY_URL\",\"extraField\":\"DUMMY_EXTRA_FIELD\"},\"eventTime\":\"DUMMY_EVENT_TIME\",\"extraField\":\"DUMMY_EXTRA_FIELD\"}]]",context);
+        testFnDebatcher.process("[[{\"id\":\"DUMMY_ID\",\"data\":{\"url\":\"DUMMY_URL\",\"extraField\":\"DUMMY_EXTRA_FIELD\"},\"eventTime\":\"DUMMY_EVENT_TIME\",\"extraField\":\"DUMMY_EXTRA_FIELD\"}]]",mockContext);
         //TODO make sure that nothing happens
     }
 
     @Test
     internal fun negative_message_missingUrl(){
         Assertions.assertThrows(IllegalArgumentException::class.java) {
-            testFnDebatcher.eventHubProcessor("[[{\"eventType\":\"Microsoft.Storage.BlobCreated\",\"id\":\"DUMMY_ID\",\"data\":{\"extraField\":\"DUMMY_EXTRA_FIELD\"},\"eventTime\":\"DUMMY_EVENT_TIME\",\"extraField\":\"DUMMY_EXTRA_FIELD\"}]]",context);
+            testFnDebatcher.process("[[{\"eventType\":\"Microsoft.Storage.BlobCreated\",\"id\":\"DUMMY_ID\",\"data\":{\"extraField\":\"DUMMY_EXTRA_FIELD\"},\"eventTime\":\"DUMMY_EVENT_TIME\",\"extraField\":\"DUMMY_EXTRA_FIELD\"}]]",mockContext);
         }
         //TODO
     }

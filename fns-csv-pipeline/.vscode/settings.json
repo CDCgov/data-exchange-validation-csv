@@ -1,9 +1,8 @@
 {
     "azureFunctions.javaBuildTool": "maven",
-    "azureFunctions.deploySubpath": "fn-decompressor/target/azure-functions/dex-csv-fn-app",
+    "azureFunctions.deploySubpath": "target/azure-functions/dex-csv-fn-app",
     "azureFunctions.projectLanguage": "Java",
     "azureFunctions.projectRuntime": "~4",
     "debug.internalConsoleOptions": "neverOpen",
-    "azureFunctions.preDeployTask": "package (functions)",
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "azureFunctions.preDeployTask": "package (functions)"
 }
