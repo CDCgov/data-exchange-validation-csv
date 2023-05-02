@@ -55,17 +55,72 @@ internal class Unit_FnDecompressor {
     }
 
     @Test
-    internal fun negative_message_missingType(){
-        testFnDebatcher.process("[[{\"id\":\"DUMMY_ID\",\"data\":{\"url\":\"DUMMY_URL\",\"extraField\":\"DUMMY_EXTRA_FIELD\"},\"eventTime\":\"DUMMY_EVENT_TIME\",\"extraField\":\"DUMMY_EXTRA_FIELD\"}]]",mockContext);
+    internal fun negative_message_missingEventType(){
+        var map = defaultMap();
+        map.remove("eventType");
+        var message = buildTestMessage(map);
+
+        testFnDebatcher.process(message,mockContext);
         //TODO make sure that nothing happens
     }
 
     @Test
-    internal fun negative_message_missingUrl(){
+    internal fun negative_message_missingId(){
+        var map = defaultMap();
+        map.remove("id");
+        var message = buildTestMessage(map);
+
         Assertions.assertThrows(IllegalArgumentException::class.java) {
-            testFnDebatcher.process("[[{\"eventType\":\"Microsoft.Storage.BlobCreated\",\"id\":\"DUMMY_ID\",\"data\":{\"extraField\":\"DUMMY_EXTRA_FIELD\"},\"eventTime\":\"DUMMY_EVENT_TIME\",\"extraField\":\"DUMMY_EXTRA_FIELD\"}]]",mockContext);
+            testFnDebatcher.process(message,mockContext);
         }
+    }
+
+    @Test
+    internal fun negative_message_missingData(){
+        var map = defaultMap();
+        map.remove("data");
+        var message = buildTestMessage(map);
+
+        Assertions.assertThrows(IllegalArgumentException::class.java) {
+            testFnDebatcher.process(message,mockContext);
+        }
+    }
+
+    @Test
+    internal fun negative_message_missingContentType(){
+        var map = defaultMap();
+        var dataMap = map["data"] as MutableMap<*,*>;
+        dataMap.remove("contentType");
+        var message = buildTestMessage(map);
+
+        Assertions.assertThrows(IllegalArgumentException::class.java) {
+            testFnDebatcher.process(message,mockContext);
+        }
+    }
+
+    @Test
+    internal fun negative_message_missingUrl(){
+        var map = defaultMap();
+        var dataMap = map["data"] as MutableMap<*,*>;
+        dataMap.remove("url");
+        var message = buildTestMessage(map);
+
+        Assertions.assertThrows(IllegalArgumentException::class.java) {
+            testFnDebatcher.process(message,mockContext);
+        }
+    }
+
+    @Test
+    internal fun negative_message_badUrl(){
+        var map = defaultMap();
+        var dataMap = map["data"] as MutableMap<String,String>;
+        dataMap["url"] = "something bad";
+        var message = buildTestMessage(map);
+
         //TODO
+        // Assertions.assertThrows(IllegalArgumentException::class.java) {
+        //     testFnDebatcher.process(message,mockContext);
+        // }
     }
 
     @Test
@@ -83,7 +138,22 @@ internal class Unit_FnDecompressor {
         //TODO
     }
 
-    private fun buildValidTestMessage(url: String): String { 
-        return "[[{\"eventType\":\"Microsoft.Storage.BlobCreated\",\"id\":\"DUMMY_ID\",\"data\":{\"url\":\"$url\",\"extraField\":\"DUMMY_EXTRA_FIELD\"},\"eventTime\":\"DUMMY_EVENT_TIME\",\"extraField\":\"DUMMY_EXTRA_FIELD\"}]]"
+    private fun defaultMap(): MutableMap<*,*>{
+        val mapData = mutableMapOf("url" to "DUMMY_URL", "contentType" to "DUMMY_CONTENT_TYPE", "extraField" to "DUMMY_EXTRA_FIELD");
+        return mutableMapOf("eventType" to "Microsoft.Storage.BlobCreated", "id" to "DUMMY_ID", "data" to mapData);
+    }
+
+    private fun buildTestMessage(mapObj:Map<*,*>): String { 
+        val message = buildMessageFromMap(mapObj);
+        return "[[$message]]"
+    }
+
+    private fun buildMessageFromMap(map:Map<*,*>):String{
+        return map.map { (k,v)-> 
+            var value = if(v is Map<*,*>){buildMessageFromMap(v)}else{"\"$v\""};
+            var combined="\"$k\":$value";
+            combined
+        }
+        .joinToString(separator=",",prefix="{",postfix="}") 
     }
 }

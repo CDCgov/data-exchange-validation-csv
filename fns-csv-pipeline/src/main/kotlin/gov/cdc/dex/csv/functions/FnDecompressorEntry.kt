@@ -1,6 +1,5 @@
 package gov.cdc.dex.csv.functions
 
-import com.google.gson.Gson
 import com.microsoft.azure.functions.annotation.FunctionName
 import com.microsoft.azure.functions.annotation.EventHubTrigger
 import com.microsoft.azure.functions.ExecutionContext
@@ -11,7 +10,8 @@ import gov.cdc.dex.csv.services.AzureBlobServiceImpl
  */
 class FnDecompressorEntry {
     //TODO look into dependency injection frameworks
-    private val blobService = AzureBlobServiceImpl();
+    private val ingestBlobConnection = System.getenv("BlobConnection")
+    private val blobService = AzureBlobServiceImpl(ingestBlobConnection);
     private val functionMethod = FnDecompressor(blobService);
 
 
