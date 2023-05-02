@@ -9,17 +9,20 @@ import com.microsoft.azure.functions.ExecutionContext
  */
 class TestFunctions {
 
-    @FunctionName("Test_IngestListener")
-    fun eventIngestion(
-			@EventHubTrigger(
-                name = "msg", 
-                eventHubName = "%EventHubName_Ingest%",
-                connection = "EventHubConnectionListen_Ingest") 
-        message: String,
-        context: ExecutionContext
-    ) {
-        context.logger.info("Ingest Event: "+message)
-    }
+    //TODO since we only have a single eventhub consumer group, only one function will get triggered for any given event
+    // if we ever have more than one consumer group, we can look into adding this function back in
+    //
+    // @FunctionName("Test_IngestListener")
+    // fun eventIngestion(
+	// 		@EventHubTrigger(
+    //             name = "msg", 
+    //             eventHubName = "%EventHubName_Ingest%",
+    //             connection = "EventHubConnectionListen_Ingest") 
+    //     message: String,
+    //     context: ExecutionContext
+    // ) {
+    //     context.logger.info("Ingest Event: "+message)
+    // }
 
     @FunctionName("Test_DecompressOkListener")
     fun eventDecompressOk(

@@ -5,20 +5,23 @@ import com.microsoft.azure.functions.annotation.FunctionName
 import com.microsoft.azure.functions.annotation.EventHubTrigger
 import com.microsoft.azure.functions.ExecutionContext
 
-import java.util.zip.ZipInputStream
-
 import gov.cdc.dex.csv.services.BlobService
 import gov.cdc.dex.csv.dtos.AzureBlobCreateEventMessage
+import gov.cdc.dex.csv.utils.*
+
+import java.io.IOException
+import java.io.File
 
 /**
  * Azure Functions with event trigger.
  */
 class FnDecompressor(blobService:BlobService) {
     private val BLOB_CREATED = "Microsoft.Storage.BlobCreated"
+    private val ZIP_TYPE = "application/zip"
     private val blobService = blobService;
    
     fun process(message: String, context: ExecutionContext) {
-        context.logger.info("Decompressor function triggered with message "+message)
+        context.logger.info("Decompressor function triggered with message $message")
         
         if(message.isEmpty()){
             throw IllegalArgumentException("Empty message from Azure!");
@@ -46,34 +49,48 @@ class FnDecompressor(blobService:BlobService) {
                     }
 
                     val path:String = getPathFromUrl(url);
-                    blobService.copyBlobToWorking(path,id);
-
-                    //TODO copy file into working
-
-                    if(isTypeCompressed(type)){
-                        //TODO if compressed, decompress
-                        //TODO if empty, create error event
-                        //TODO for each file, create OK event with that file (preserving metadata)
-
-                    }else{
-                        
-                        //TODO if not compressed, create OK event with that file (preserving metadata)
+                    if(!blobService.doesIngestBlobExist(path)){
+                        throw IllegalArgumentException("File missing in Azure! $url");
                     }
-                    // val blobClient = blobService.getBlobClient(path)
+                    
+                    //copy whether unzipping or not, to preserve the zipped file
+                    val processPath = blobService.copyIngestBlobToProcess(path,id);
 
+                    if(type == ZIP_TYPE){
+                        var localDir = File("temp/id");
+                        localDir.mkdirs();
+                        try{
+                            //in the utils package
+                            decompressFileStream(blobService.getProcessBlobInputStream(processPath),localDir);
+                            //TODO if empty, create error event
+                        }catch(e:IOException){
+                            createFailEventAndMoveFile(event, processPath, e);
+                        }
+                        //TODO for each file, 
+                          //TODO upload to storage
+                          //TODO create OK event with that file (preserving metadata)
+                    }else{
+                        createOkEvent(event, processPath)
+                    }
                 }
             }
         }
-        //TODO
     }
 
     private fun getPathFromUrl(url:String):String{
-        //TODO
-        return "";
+        //assume url is formatted "http://domain/container/path/morePath/morePath"
+        val urlArray = url.split("/");
+        if(urlArray.size < 5){
+            throw IllegalArgumentException("Azure message had bad URL for the file! $url");
+        }
+        return urlArray.subList(4, urlArray.size).joinToString(separator="/") 
     }
 
-    private fun isTypeCompressed(type:String):Boolean{
-        //TODO
-        return false;
+    private fun createOkEvent(parentEvent:AzureBlobCreateEventMessage, processPath:String){
+
+    }
+
+    private fun createFailEventAndMoveFile(parentEvent:AzureBlobCreateEventMessage, processPath:String, exception: Exception){
+        //TODO also move the file from process to error
     }
 }
