@@ -15,15 +15,17 @@ class AzureBlobServiceImpl(connectionStr:String) :BlobService {
         return client.getBlobClient(path).exists()
     }
      
-    override fun moveBlob(fromContainerName:String, fromPath: String, toContainerName:String, toPath: String) { 
+    override fun moveBlob(fromContainerName:String, fromPath: String, toContainerName:String, toPath: String):String { 
         val fromClient = blobServiceClient.getBlobContainerClient(fromContainerName);
         val toClient = blobServiceClient.getBlobContainerClient(toContainerName);
 
         val fromBlob = fromClient.getBlobClient(fromPath);
         val sourceUrl = fromBlob.getBlobUrl();
-        toClient.getBlobClient(toPath).blockBlobClient.uploadFromUrl(sourceUrl);
+        val toBlob = toClient.getBlobClient(toPath)
+        toBlob.blockBlobClient.uploadFromUrl(sourceUrl);
         
         fromBlob.delete()
+        return toBlob.getBlobUrl()
     }
 
     override fun getBlobDownloadStream(containerName:String, path: String): InputStream {
@@ -32,9 +34,10 @@ class AzureBlobServiceImpl(connectionStr:String) :BlobService {
      }
 
 
-     override fun getBlobUploadStream(containerName:String, path: String): OutputStream {
+     override fun getBlobUploadStream(containerName:String, path: String): Pair<OutputStream,String> {
         val client = blobServiceClient.getBlobContainerClient(containerName);
-        return client.getBlobClient(path).blockBlobClient.getBlobOutputStream();
+        val blob = client.getBlobClient(path);
+        return Pair(blob.blockBlobClient.getBlobOutputStream(),blob.getBlobUrl());
      }
      
 }

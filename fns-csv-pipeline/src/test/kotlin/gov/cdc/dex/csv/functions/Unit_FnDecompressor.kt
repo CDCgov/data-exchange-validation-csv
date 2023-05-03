@@ -42,12 +42,17 @@ internal class Unit_FnDecompressor {
     private val mockEventService : EventService = Mockito.mock(EventService::class.java);
     private val testFnDebatcher : FnDecompressor = FnDecompressor(mockBlobService,mockEventService,connectionNames);
 
+    private val eventMap = mutableMapOf<String,MutableList<String>>()
+
     @BeforeEach
     fun initiateMocks(){
         Mockito.`when`(mockBlobService.doesBlobExist(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::doesTestFileExist)
         Mockito.`when`(mockBlobService.moveBlob(Mockito.anyString(),Mockito.anyString(),Mockito.anyString(),Mockito.anyString())).thenAnswer(this::moveTestFile)
         Mockito.`when`(mockBlobService.getBlobDownloadStream(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::openInputStream)
         Mockito.`when`(mockBlobService.getBlobUploadStream(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::openOutputStream)
+
+        Mockito.`when`(mockEventService.sendOne(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::addEvent)
+        Mockito.`when`(mockEventService.sendBatch(Mockito.anyString(),Mockito.anyList())).thenAnswer(this::addEvents)
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,23 +71,32 @@ internal class Unit_FnDecompressor {
         Assertions.assertTrue(File(processDir,"happy_single/test-upload.csv").exists(), "file not in processed!")
         Assertions.assertFalse(File(errorDir,"happy_single").exists(), "incorrect error dir created!")
 
-        //TODO verify the event was triggered
+        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
+        var okMessageList = eventMap["ok"]
+        Assertions.assertFalse(okMessageList.isNullOrEmpty(), "missing ok message")
+        Assertions.assertEquals(1, okMessageList?.size, "too many ok messages")
     }
 
     @Test
     internal fun happyPath_zip(){
-        copyToIngest("test-upload.zip")
-        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-upload.zip", contentType="application/zip",id="happy_zip")
+        copyToIngest("test-upload-zip.zip")
+        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-upload-zip.zip", contentType="application/zip",id="happy_zip")
         var message = buildTestMessage(map);
         
         testFnDebatcher.process(message,mockContext);
 
         Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
-        Assertions.assertTrue(File(processDir,"happy_zip/test-upload.zip").exists(), "file not in processed!")
-        Assertions.assertTrue(File(processDir,"happy_zip/test-upload/test-upload.csv").exists(), "file not in processed!")
+        Assertions.assertTrue(File(processDir,"happy_zip/test-upload-zip.zip").exists(), "file not in processed!")
+        Assertions.assertTrue(File(processDir,"happy_zip/test-upload-zip/test-upload-1.csv").exists(), "file not in processed!")
+        Assertions.assertTrue(File(processDir,"happy_zip/test-upload-zip/test-upload-2.csv").exists(), "file not in processed!")
+        Assertions.assertTrue(File(processDir,"happy_zip/test-upload-zip/test-upload-3/test-upload.csv").exists(), "file not in processed!")
+        Assertions.assertTrue(File(processDir,"happy_zip/test-upload-zip/test-upload-inner/test-upload-4.csv").exists(), "file not in processed!")
         Assertions.assertFalse(File(errorDir,"happy_zip").exists(), "incorrect error dir created!")
 
-        //TODO verify the event was triggered
+        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
+        var okMessageList = eventMap["ok"]
+        Assertions.assertFalse(okMessageList.isNullOrEmpty(), "missing ok message")
+        Assertions.assertEquals(4, okMessageList?.size, "too many ok messages")
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,6 +109,9 @@ internal class Unit_FnDecompressor {
         }
 
         Assertions.assertEquals("Empty message from Azure!", e.message)
+        
+        Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
+        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
     }
 
     @Test
@@ -102,6 +119,9 @@ internal class Unit_FnDecompressor {
         Assertions.assertThrows(com.google.gson.JsonSyntaxException::class.java) {
             testFnDebatcher.process("][",mockContext);
         }
+        
+        Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
+        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
     }
 
     @Test
@@ -111,7 +131,9 @@ internal class Unit_FnDecompressor {
         var message = buildTestMessage(map);
 
         testFnDebatcher.process(message,mockContext);
-        //TODO make sure that nothing happens
+        
+        Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
+        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
     }
 
     @Test
@@ -125,6 +147,9 @@ internal class Unit_FnDecompressor {
         }
         
         Assertions.assertEquals("Azure message missing id!", e.message)
+        
+        Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
+        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
     }
 
     @Test
@@ -138,6 +163,9 @@ internal class Unit_FnDecompressor {
         }
         
         Assertions.assertEquals("Azure message missing blob content-type!", e.message)
+        
+        Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
+        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
     }
 
     @Test
@@ -152,6 +180,9 @@ internal class Unit_FnDecompressor {
         }
         
         Assertions.assertEquals("Azure message missing blob content-type!", e.message)
+        
+        Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
+        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
     }
 
     @Test
@@ -166,6 +197,9 @@ internal class Unit_FnDecompressor {
         }
         
         Assertions.assertEquals("Azure message missing blob URL!", e.message)
+        
+        Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
+        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
     }
 
     @Test
@@ -178,6 +212,9 @@ internal class Unit_FnDecompressor {
         }
         
         Assertions.assertEquals("Azure message had bad URL for the file! DUMMY_URL", e.message)
+        
+        Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
+        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
     }
 
     @Test
@@ -190,6 +227,9 @@ internal class Unit_FnDecompressor {
         }
         
         Assertions.assertEquals("File missing in Azure! DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-not-there", e.message)
+        
+        Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
+        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -207,7 +247,10 @@ internal class Unit_FnDecompressor {
         Assertions.assertFalse(File(processDir,"bad_zip/test-upload.csv").exists(), "file remained in processed!")
         Assertions.assertTrue(File(errorDir,"bad_zip/test-upload.csv").exists(), "file not put in error!")
 
-        //TODO verify the event was triggered
+        Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
+        var failMessageList = eventMap["fail"]
+        Assertions.assertFalse(failMessageList.isNullOrEmpty(), "missing fail message")
+        Assertions.assertEquals(1, failMessageList?.size, "too many fail messages")
     }
 
     @Test
@@ -222,7 +265,10 @@ internal class Unit_FnDecompressor {
         Assertions.assertFalse(File(processDir,"empty_zip/test-empty.zip").exists(), "file remained in processed!")
         Assertions.assertTrue(File(errorDir,"empty_zip/test-empty.zip").exists(), "file not put in error!")
 
-        //TODO verify the event was triggered
+        Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
+        var failMessageList = eventMap["fail"]
+        Assertions.assertFalse(failMessageList.isNullOrEmpty(), "missing fail message")
+        Assertions.assertEquals(1, failMessageList?.size, "too many fail messages")
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -259,7 +305,7 @@ internal class Unit_FnDecompressor {
 
         localFileIn.delete()
 
-        return relativePathOut;
+        return localFileOut.absolutePath;
     }
     
     private fun openInputStream(i: InvocationOnMock):InputStream{
@@ -270,12 +316,36 @@ internal class Unit_FnDecompressor {
         return FileInputStream(localFile);
     }
     
-    private fun openOutputStream(i: InvocationOnMock):OutputStream{
+    private fun openOutputStream(i: InvocationOnMock):Pair<OutputStream,String>{
         val container:String = i.getArgument(0);
         val relativePath:String = i.getArgument(1);
 
         var localFile = File(File(outputParentDir, container),relativePath);
         localFile.parentFile.mkdirs();
-        return FileOutputStream(localFile);
+        return Pair(FileOutputStream(localFile),localFile.absolutePath);
+    }
+    
+    private fun addEvent(i: InvocationOnMock){
+        val hubName:String = i.getArgument(0);
+        val message:String = i.getArgument(1);
+
+        commonAddEvent(hubName, listOf(message))
+    }
+    
+    private fun addEvents(i: InvocationOnMock){
+        val hubName:String = i.getArgument(0);
+        val messages:List<String> = i.getArgument(1);
+        
+        commonAddEvent(hubName, messages)
+    }
+
+    private fun commonAddEvent(hubName:String, messages:List<String>){
+        for(message in messages){
+            println("[event][$hubName] $message")
+        }
+
+        var list = eventMap.getOrDefault(hubName, mutableListOf());
+        eventMap.put(hubName, list)
+        list.addAll(messages);
     }
 }

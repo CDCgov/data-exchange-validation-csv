@@ -9,6 +9,8 @@ import gov.cdc.dex.csv.services.BlobService
 import gov.cdc.dex.csv.services.EventService
 import gov.cdc.dex.csv.dtos.AzureBlobCreateEventMessage
 import gov.cdc.dex.csv.dtos.ConnectionNames
+import gov.cdc.dex.csv.dtos.DecompressOkEventMessage
+import gov.cdc.dex.csv.dtos.DecompressFailEventMessage
 
 import java.io.IOException
 import java.io.File
@@ -67,12 +69,12 @@ class FnDecompressor(blobService:BlobService, eventService:EventService, connect
                     //copy whether unzipping or not, to preserve the zipped file
                     val processFolder = ingestFolder+"/"+id
                     val processFilePath = processFolder+"/"+ingestFileName
-                    blobService.moveBlob(connectionNames.blobStorage.ingest, ingestFilePath, connectionNames.blobStorage.processed, processFilePath)
+                    val processUrl = blobService.moveBlob(connectionNames.blobStorage.ingest, ingestFilePath, connectionNames.blobStorage.processed, processFilePath)
 
                     if(type == ZIP_TYPE){
                         var writtenPaths:List<String> = try{
                             var downloadStream = blobService.getBlobDownloadStream(connectionNames.blobStorage.processed, processFilePath)
-                            decompressFileStream(downloadStream, processFilePath);
+                            decompressFileStream(downloadStream, processFolder);
                         }catch(e:IOException){
                             context.logger.log(Level.SEVERE, "Error unzipping: $processFilePath", e);
                             createFailEventAndMoveFile(event, processFilePath, "Error unzipping: $processFilePath : $e.localizedMessage");
@@ -82,28 +84,29 @@ class FnDecompressor(blobService:BlobService, eventService:EventService, connect
                         if(writtenPaths.isEmpty()){
                             createFailEventAndMoveFile(event, processFilePath, "Zipped file was empty: $processFilePath");
                         }else{
-                            for(writtenPath in writtenPaths){
-                                createOkEvent(event,writtenPath)
-                            }
+                            createOkEvents(event,writtenPaths)
                         }
                     }else{
-                        createOkEvent(event, processFilePath)
+                        createOkEvents(event, listOf(processUrl))
                     }
                 }
             }
         }
     }
 
-    private fun createOkEvent(parentEvent:AzureBlobCreateEventMessage, processFilePath:String){
+    private fun createOkEvents(parentEvent:AzureBlobCreateEventMessage, processFilePaths:List<String>){
+        val gson=Gson()
+        var messages = processFilePaths.map{path -> DecompressOkEventMessage(parentEvent, path)}.map{pojo -> gson.toJson(pojo)}
 
-        //eventService.sendOne(connectionNames.eventHubs.decompressOk, jsonMessage)
+        eventService.sendBatch(connectionNames.eventHubs.decompressOk, messages)
     }
 
     private fun createFailEventAndMoveFile(parentEvent:AzureBlobCreateEventMessage, processFilePath:String, errorMessage: String){
         blobService.moveBlob(connectionNames.blobStorage.processed, processFilePath, connectionNames.blobStorage.error, processFilePath)
 
-println("\n\n $errorMessage \n\n")
-        //eventService.sendOne(connectionNames.eventHubs.decompressFail, jsonMessage)
+        var pojo = DecompressFailEventMessage(parentEvent, processFilePath,errorMessage)
+        var message=Gson().toJson(pojo)
+        eventService.sendOne(connectionNames.eventHubs.decompressFail, message)
     }
 
     private fun getPathFromUrl(url:String):Pair<String,String>{
@@ -118,16 +121,31 @@ println("\n\n $errorMessage \n\n")
     }
 
     private fun decompressFileStream(stream:InputStream, processPath:String):List<String>{
-        val outputPath = processPath.replace(".zip","/");
+        val outputPath = processPath+"/";
         var writtenPaths : MutableList<String> = mutableListOf();
-        ZipInputStream(stream).use{ zis ->
-            var zipEntry = zis.nextEntry;
-            
-            while (zipEntry != null) {
-                if (!zipEntry.isDirectory()) {
+        //use is equivalent of try-with-resources, will close the stream at the end
+        stream.use{ str ->
+            decompressFileStreamRecursive(str, outputPath,writtenPaths)
+        }
+        return writtenPaths
+    }
+    
+
+    private fun decompressFileStreamRecursive(stream:InputStream, outputPath:String,writtenPaths : MutableList<String>){
+        //don't close stream here because of recursion
+        var zis = ZipInputStream(stream)
+        var zipEntry = zis.nextEntry;
+        
+        while (zipEntry != null) {
+            if (!zipEntry.isDirectory()) {
+                if(zipEntry.name.endsWith(".zip")){
+                    //if a nested zip, recurse
+                    var localPath = zipEntry.name.replace(".zip","/")
+                    decompressFileStreamRecursive(zis,outputPath+localPath,writtenPaths)
+                }else{
                     // write file content
                     var pathToWrite = outputPath+zipEntry.name
-                    var uploadStream = blobService.getBlobUploadStream(connectionNames.blobStorage.processed, pathToWrite)
+                    var (uploadStream,blobUrl) = blobService.getBlobUploadStream(connectionNames.blobStorage.processed, pathToWrite)
                     BufferedOutputStream(uploadStream).use{bos ->
                         val bytesIn = ByteArray(BUFFER_SIZE)
                         var read: Int
@@ -135,12 +153,10 @@ println("\n\n $errorMessage \n\n")
                             bos.write(bytesIn, 0, read)
                         }
                     }
-                    writtenPaths.add(pathToWrite)
+                    writtenPaths.add(blobUrl)
                 }
-                zipEntry = zis.getNextEntry();
             }
-            zis.closeEntry();
+            zipEntry = zis.getNextEntry();
         }
-        return writtenPaths
     }
 }
