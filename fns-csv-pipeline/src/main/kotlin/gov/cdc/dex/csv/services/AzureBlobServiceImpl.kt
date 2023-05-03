@@ -6,8 +6,11 @@ import com.azure.storage.blob.BlobServiceClient
 import com.azure.storage.blob.BlobServiceClientBuilder
 import java.io.InputStream
 import java.io.OutputStream
+import java.io.BufferedOutputStream
+import java.io.BufferedInputStream
 
 class AzureBlobServiceImpl(connectionStr:String) :BlobService {
+    private val BUFFER_SIZE = 4096
     private val blobServiceClient: BlobServiceClient = BlobServiceClientBuilder().connectionString(connectionStr).buildClient();
     
     override fun doesBlobExist(containerName:String, path: String): Boolean {
@@ -20,9 +23,17 @@ class AzureBlobServiceImpl(connectionStr:String) :BlobService {
         val toClient = blobServiceClient.getBlobContainerClient(toContainerName);
 
         val fromBlob = fromClient.getBlobClient(fromPath);
-        val sourceUrl = fromBlob.getBlobUrl();
         val toBlob = toClient.getBlobClient(toPath)
-        toBlob.blockBlobClient.uploadFromUrl(sourceUrl);
+
+        BufferedInputStream(fromBlob.openInputStream()).use{ fromStream ->
+            BufferedOutputStream(toBlob.blockBlobClient.getBlobOutputStream()).use{ toStream ->
+                val bytesIn = ByteArray(BUFFER_SIZE)
+                var read: Int
+                while (fromStream.read(bytesIn).also { read = it } != -1) {
+                    toStream.write(bytesIn, 0, read)
+                }
+            }
+        }
         
         fromBlob.delete()
         return toBlob.getBlobUrl()
