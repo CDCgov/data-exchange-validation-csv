@@ -29,7 +29,7 @@ class FnDecompressor(blobService:BlobService, eventService:EventService, connect
     private val connectionNames = connectionNames;
 
     private val BLOB_CREATED = "Microsoft.Storage.BlobCreated"
-    private val ZIP_TYPE = "application/zip"
+    private val ZIP_TYPES = listOf("application/zip","application/x-zip-compressed")
     private val BUFFER_SIZE = 4096
    
     fun process(message: String, context: ExecutionContext) {
@@ -39,56 +39,54 @@ class FnDecompressor(blobService:BlobService, eventService:EventService, connect
             throw IllegalArgumentException("Empty message from Azure!");
         }
 		
-        val eventArrArr = Gson().fromJson(message, Array<Array<AzureBlobCreateEventMessage>>::class.java)
+        val eventArr = Gson().fromJson(message, Array<AzureBlobCreateEventMessage>::class.java)
 
-        for(eventArr in eventArrArr){
-            for(event in eventArr){
-                if ( event.eventType == BLOB_CREATED) {
-                    context.logger.info("Received BLOB_CREATED event: --> $event")
+        for(event in eventArr){
+            if ( event.eventType == BLOB_CREATED) {
+                context.logger.info("Received BLOB_CREATED event: --> $event")
 
-                    val id = event.id;
-                    val type = event.evHubData?.contentType
-                    val url = event.evHubData?.url;
+                val id = event.id;
+                val type = event.evHubData?.contentType
+                val url = event.evHubData?.url;
 
-                    if(id==null){
-                        throw IllegalArgumentException("Azure message missing id!");
+                if(id==null){
+                    throw IllegalArgumentException("Azure message missing id!");
+                }
+                if(type==null){
+                    throw IllegalArgumentException("Azure message missing blob content-type!");
+                }
+                if(url==null){
+                    throw IllegalArgumentException("Azure message missing blob URL!");
+                }
+
+                val (ingestFolder,ingestFileName) = getPathFromUrl(url);
+                val ingestFilePath = ingestFolder+"/"+ingestFileName
+                if(!blobService.doesBlobExist(connectionNames.blobStorage.ingest, ingestFilePath)){
+                    throw IllegalArgumentException("File missing in Azure! $url");
+                }
+                
+                //copy whether unzipping or not, to preserve the zipped file
+                val processFolder = ingestFolder+"/"+id
+                val processFilePath = processFolder+"/"+ingestFileName
+                val processUrl = blobService.moveBlob(connectionNames.blobStorage.ingest, ingestFilePath, connectionNames.blobStorage.processed, processFilePath)
+
+                if(ZIP_TYPES.contains(type)){
+                    var writtenPaths:List<String> = try{
+                        var downloadStream = blobService.getBlobDownloadStream(connectionNames.blobStorage.processed, processFilePath)
+                        decompressFileStream(downloadStream, processFolder);
+                    }catch(e:IOException){
+                        context.logger.log(Level.SEVERE, "Error unzipping: $processFilePath", e);
+                        createFailEventAndMoveFile(event, processFilePath, "Error unzipping: $processFilePath : $e.localizedMessage");
+                        continue;
                     }
-                    if(type==null){
-                        throw IllegalArgumentException("Azure message missing blob content-type!");
-                    }
-                    if(url==null){
-                        throw IllegalArgumentException("Azure message missing blob URL!");
-                    }
 
-                    val (ingestFolder,ingestFileName) = getPathFromUrl(url);
-                    val ingestFilePath = ingestFolder+"/"+ingestFileName
-                    if(!blobService.doesBlobExist(connectionNames.blobStorage.ingest, ingestFilePath)){
-                        throw IllegalArgumentException("File missing in Azure! $url");
-                    }
-                    
-                    //copy whether unzipping or not, to preserve the zipped file
-                    val processFolder = ingestFolder+"/"+id
-                    val processFilePath = processFolder+"/"+ingestFileName
-                    val processUrl = blobService.moveBlob(connectionNames.blobStorage.ingest, ingestFilePath, connectionNames.blobStorage.processed, processFilePath)
-
-                    if(type == ZIP_TYPE){
-                        var writtenPaths:List<String> = try{
-                            var downloadStream = blobService.getBlobDownloadStream(connectionNames.blobStorage.processed, processFilePath)
-                            decompressFileStream(downloadStream, processFolder);
-                        }catch(e:IOException){
-                            context.logger.log(Level.SEVERE, "Error unzipping: $processFilePath", e);
-                            createFailEventAndMoveFile(event, processFilePath, "Error unzipping: $processFilePath : $e.localizedMessage");
-                            continue;
-                        }
-
-                        if(writtenPaths.isEmpty()){
-                            createFailEventAndMoveFile(event, processFilePath, "Zipped file was empty: $processFilePath");
-                        }else{
-                            createOkEvents(event,writtenPaths)
-                        }
+                    if(writtenPaths.isEmpty()){
+                        createFailEventAndMoveFile(event, processFilePath, "Zipped file was empty: $processFilePath");
                     }else{
-                        createOkEvents(event, listOf(processUrl))
+                        createOkEvents(event,writtenPaths)
                     }
+                }else{
+                    createOkEvents(event, listOf(processUrl))
                 }
             }
         }

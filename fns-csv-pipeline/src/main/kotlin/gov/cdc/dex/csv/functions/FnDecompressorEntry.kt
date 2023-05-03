@@ -2,6 +2,7 @@ package gov.cdc.dex.csv.functions
 
 import com.microsoft.azure.functions.annotation.FunctionName
 import com.microsoft.azure.functions.annotation.EventHubTrigger
+import com.microsoft.azure.functions.annotation.Cardinality
 import com.microsoft.azure.functions.ExecutionContext
 import gov.cdc.dex.csv.services.AzureBlobServiceImpl
 import gov.cdc.dex.csv.services.AzureEventServiceImpl
@@ -36,6 +37,7 @@ class FnDecompressorEntry {
     @FunctionName("DexCsvDecompressor")
     fun eventHubProcessor(
 			@EventHubTrigger(
+                cardinality = Cardinality.ONE,
                 name = "msg", 
                 eventHubName = "%EventHubName_Ingest%",
                 connection = "EventHubConnection") 

@@ -2,6 +2,7 @@ package gov.cdc.dex.csv.functions
 
 import com.microsoft.azure.functions.annotation.FunctionName
 import com.microsoft.azure.functions.annotation.EventHubTrigger
+import com.microsoft.azure.functions.annotation.Cardinality
 import com.microsoft.azure.functions.ExecutionContext
 
 /**
@@ -27,6 +28,7 @@ class TestFunctions {
     @FunctionName("Test_DecompressOkListener")
     fun eventDecompressOk(
 			@EventHubTrigger(
+                cardinality = Cardinality.ONE,
                 name = "msg", 
                 eventHubName = "%EventHubName_DecompressOk%",
                 connection = "EventHubConnection") 
@@ -39,6 +41,7 @@ class TestFunctions {
     @FunctionName("Test_DecompressFailListener")
     fun eventDecompressFail(
 			@EventHubTrigger(
+                cardinality = Cardinality.ONE,
                 name = "msg", 
                 eventHubName = "%EventHubName_DecompressFail%",
                 connection = "EventHubConnection") 
