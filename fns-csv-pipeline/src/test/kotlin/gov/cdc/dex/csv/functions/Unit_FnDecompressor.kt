@@ -18,6 +18,7 @@ import org.mockito.Mockito
 import org.mockito.invocation.InvocationOnMock;
 
 import gov.cdc.dex.csv.services.BlobService
+import gov.cdc.dex.csv.test.utils.*
 
 internal class Unit_FnDecompressor {
     companion object{
@@ -25,19 +26,17 @@ internal class Unit_FnDecompressor {
         private val ingestDir = File("src/test/resources")
         private val processDir = File(outputParentDir,"process")
         private val errorDir = File(outputParentDir,"error")
+
     }
 
+    private val mockContext = mockContext();
     private val mockBlobService : BlobService = Mockito.mock(BlobService::class.java);
-    private val mockContext : ExecutionContext = Mockito.mock(ExecutionContext::class.java);
-    private val logger : Logger = Mockito.mock(Logger::class.java);
-
     private val testFnDebatcher : FnDecompressor = FnDecompressor(mockBlobService);
-
     @BeforeEach
     fun initiateMocks(){
-        Mockito.`when`(mockContext.logger).thenReturn(logger)
-        Mockito.`when`(logger.info(Mockito.anyString())).thenAnswer(this::loggerInvocation)
-        
+        processDir.mkdirs()
+        errorDir.mkdirs()
+
         Mockito.`when`(mockBlobService.doesIngestBlobExist(Mockito.anyString())).thenAnswer(this::doesTestFileExist)
         Mockito.`when`(mockBlobService.copyIngestBlobToProcess(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::copyTestFile)
         Mockito.`when`(mockBlobService.getProcessBlobInputStream(Mockito.anyString())).thenAnswer(this::openInputStream)
@@ -199,22 +198,8 @@ internal class Unit_FnDecompressor {
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //internal Azure error, unsure how to handle or how to even test....
-
-    @Test
-    internal fun negative_integration_unableToConnectToStorage(){
-        //TODO
-    }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //helper functions
 
-    private fun loggerInvocation(i: InvocationOnMock){
-        val toLog:String = i.getArgument(0);
-        println("[log] $toLog");
-        //TODO maybe do something with this in the tests
-    }
-    
     private fun doesTestFileExist(i: InvocationOnMock):Boolean{
         val relativePath:String = i.getArgument(0);
 
@@ -251,24 +236,5 @@ internal class Unit_FnDecompressor {
         var localFile = File(processDir,relativePath);
         localFile.parentFile.mkdirs();
         return FileOutputStream(localFile);
-    }
-
-    private fun defaultMap(id:String = "DUMMY_ID",url:String = "DUMMY_URL", contentType:String = "DUMMY_CONTENT_TYPE"): MutableMap<*,*>{
-        val mapData = mutableMapOf("url" to url, "contentType" to contentType, "extraField" to "DUMMY_EXTRA_FIELD");
-        return mutableMapOf("eventType" to "Microsoft.Storage.BlobCreated", "id" to id, "data" to mapData, "extraField" to "DUMMY_EXTRA_FIELD");
-    }
-
-    private fun buildTestMessage(mapObj:Map<*,*>): String { 
-        val message = buildMessageFromMap(mapObj);
-        return "[[$message]]"
-    }
-
-    private fun buildMessageFromMap(map:Map<*,*>):String{
-        return map.map { (k,v)-> 
-            var value = if(v is Map<*,*>){buildMessageFromMap(v)}else{"\"$v\""};
-            var combined="\"$k\":$value";
-            combined
-        }
-        .joinToString(separator=",",prefix="{",postfix="}") 
     }
 }

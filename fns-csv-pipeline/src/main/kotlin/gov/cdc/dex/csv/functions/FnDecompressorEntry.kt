@@ -10,8 +10,12 @@ import gov.cdc.dex.csv.services.AzureBlobServiceImpl
  */
 class FnDecompressorEntry {
     //TODO look into dependency injection frameworks
-    private val ingestBlobConnection = System.getenv("BlobConnection")
-    private val blobService = AzureBlobServiceImpl(ingestBlobConnection);
+    private val blobConnection = System.getenv("BlobConnection")
+    private val ingestBlobContainer = System.getenv("BlobContainer_Ingest")
+    private val processedBlobContainer = System.getenv("BlobContainer_Processed")
+    private val errorBlobContainer = System.getenv("BlobContainer_Error")
+
+    private val blobService = AzureBlobServiceImpl(blobConnection, ingestBlobContainer, processedBlobContainer, errorBlobContainer);
     private val functionMethod = FnDecompressor(blobService);
 
 
