@@ -76,30 +76,34 @@ class FnDecompressor(blobService:BlobService, eventService:EventService, connect
                         decompressFileStream(downloadStream, processFolder);
                     }catch(e:IOException){
                         context.logger.log(Level.SEVERE, "Error unzipping: $processFilePath", e);
-                        createFailEventAndMoveFile(event, processFilePath, "Error unzipping: $processFilePath : $e.localizedMessage");
+                        createFailEventAndMoveFile(event, processFilePath, "Error unzipping: $processFilePath : $e.localizedMessage", context);
                         continue;
                     }
 
                     if(writtenPaths.isEmpty()){
-                        createFailEventAndMoveFile(event, processFilePath, "Zipped file was empty: $processFilePath");
+                        createFailEventAndMoveFile(event, processFilePath, "Zipped file was empty: $processFilePath", context);
                     }else{
-                        createOkEvents(event,writtenPaths)
+                        createOkEvents(event,writtenPaths, context)
                     }
                 }else{
-                    createOkEvents(event, listOf(processUrl))
+                    createOkEvents(event, listOf(processUrl), context)
                 }
             }
         }
     }
 
-    private fun createOkEvents(parentEvent:AzureBlobCreateEventMessage, processFilePaths:List<String>){
+    private fun createOkEvents(parentEvent:AzureBlobCreateEventMessage, processFilePaths:List<String>, context: ExecutionContext){
+        context.logger.info("Decompress OK : "+processFilePaths);
+
         val gson=Gson()
         var messages = processFilePaths.map{path -> DecompressOkEventMessage(parentEvent, path)}.map{pojo -> gson.toJson(pojo)}
 
         eventService.sendBatch(connectionNames.eventHubs.decompressOk, messages)
     }
 
-    private fun createFailEventAndMoveFile(parentEvent:AzureBlobCreateEventMessage, processFilePath:String, errorMessage: String){
+    private fun createFailEventAndMoveFile(parentEvent:AzureBlobCreateEventMessage, processFilePath:String, errorMessage: String, context: ExecutionContext){
+        context.logger.warning("Decompress Fail : $processFilePath : $errorMessage");
+
         blobService.moveBlob(connectionNames.blobStorage.processed, processFilePath, connectionNames.blobStorage.error, processFilePath)
 
         var pojo = DecompressFailEventMessage(parentEvent, processFilePath,errorMessage)

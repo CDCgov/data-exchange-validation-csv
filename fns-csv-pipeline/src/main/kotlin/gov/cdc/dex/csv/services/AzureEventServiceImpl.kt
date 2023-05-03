@@ -25,11 +25,10 @@ class AzureEventServiceImpl (val connectionStr: String) : EventService {
                         )
                     }
                 }
-                
-                // send the last batch of remaining events
-                if (eventDataBatch.count > 0) {
-                    producer.send(eventDataBatch)
-                }
+            }
+            // send the last batch of remaining events
+            if (eventDataBatch.count > 0) {
+                producer.send(eventDataBatch)
             }
         }
     }

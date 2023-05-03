@@ -374,6 +374,7 @@ internal class Unit_FnDecompressor {
 
         Mockito.`when`(mockContext.logger).thenReturn(logger)
         Mockito.`when`(logger.info(Mockito.anyString())).thenAnswer(::loggerInvocation)
+        Mockito.`when`(logger.warning(Mockito.anyString())).thenAnswer(::loggerInvocation)
         return mockContext
     }
 
