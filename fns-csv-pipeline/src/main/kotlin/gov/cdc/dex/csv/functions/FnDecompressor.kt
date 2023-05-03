@@ -7,10 +7,14 @@ import com.microsoft.azure.functions.ExecutionContext
 
 import gov.cdc.dex.csv.services.BlobService
 import gov.cdc.dex.csv.dtos.AzureBlobCreateEventMessage
-import gov.cdc.dex.csv.utils.*
 
 import java.io.IOException
 import java.io.File
+import java.io.InputStream
+import java.io.BufferedOutputStream
+import java.io.OutputStream
+import java.util.logging.Level
+import java.util.zip.ZipInputStream
 
 /**
  * Azure Functions with event trigger.
@@ -19,6 +23,7 @@ class FnDecompressor(blobService:BlobService) {
     private val BLOB_CREATED = "Microsoft.Storage.BlobCreated"
     private val ZIP_TYPE = "application/zip"
     private val blobService = blobService;
+    private val BUFFER_SIZE = 4096
    
     fun process(message: String, context: ExecutionContext) {
         context.logger.info("Decompressor function triggered with message $message")
@@ -57,24 +62,37 @@ class FnDecompressor(blobService:BlobService) {
                     val processPath = blobService.copyIngestBlobToProcess(path,id);
 
                     if(type == ZIP_TYPE){
-                        var localDir = File("temp/id");
-                        localDir.mkdirs();
-                        try{
-                            //in the utils package
-                            decompressFileStream(blobService.getProcessBlobInputStream(processPath),localDir);
-                            //TODO if empty, create error event
+                        var writtenPaths:List<String> = try{
+                            var downloadStream = blobService.getProcessBlobInputStream(processPath);
+                            decompressFileStream(downloadStream, processPath);
                         }catch(e:IOException){
-                            createFailEventAndMoveFile(event, processPath, e);
+                            context.logger.log(Level.SEVERE, "Error unzipping: $processPath", e);
+                            createFailEventAndMoveFile(event, processPath, "Error unzipping: $processPath : $e.localizedMessage");
+                            continue;
                         }
-                        //TODO for each file, 
-                          //TODO upload to storage
-                          //TODO create OK event with that file (preserving metadata)
+
+                        if(writtenPaths.isEmpty()){
+                            createFailEventAndMoveFile(event, processPath, "Zipped file was empty: $processPath");
+                        }else{
+                            for(writtenPath in writtenPaths){
+                                createOkEvent(event,writtenPath)
+                            }
+                        }
                     }else{
                         createOkEvent(event, processPath)
                     }
                 }
             }
         }
+    }
+
+    private fun createOkEvent(parentEvent:AzureBlobCreateEventMessage, processPath:String){
+
+    }
+
+    private fun createFailEventAndMoveFile(parentEvent:AzureBlobCreateEventMessage, processPath:String, errorMessage: String){
+        //TODO also move the file from process to error
+println("\n\n $errorMessage \n\n")
     }
 
     private fun getPathFromUrl(url:String):String{
@@ -86,11 +104,30 @@ class FnDecompressor(blobService:BlobService) {
         return urlArray.subList(4, urlArray.size).joinToString(separator="/") 
     }
 
-    private fun createOkEvent(parentEvent:AzureBlobCreateEventMessage, processPath:String){
-
-    }
-
-    private fun createFailEventAndMoveFile(parentEvent:AzureBlobCreateEventMessage, processPath:String, exception: Exception){
-        //TODO also move the file from process to error
+    private fun decompressFileStream(stream:InputStream, processPath:String):List<String>{
+        val outputPath = processPath.replace(".zip", "/");
+        var writtenPaths : MutableList<String> = mutableListOf();
+        ZipInputStream(stream).use{ zis ->
+            var zipEntry = zis.nextEntry;
+            
+            while (zipEntry != null) {
+                if (!zipEntry.isDirectory()) {
+                    // write file content
+                    var pathToWrite = outputPath+zipEntry.name
+                    var uploadStream = blobService.getProcessBlobOutputStream(pathToWrite)
+                    BufferedOutputStream(uploadStream).use{bos ->
+                        val bytesIn = ByteArray(BUFFER_SIZE)
+                        var read: Int
+                        while (zis.read(bytesIn).also { read = it } != -1) {
+                            bos.write(bytesIn, 0, read)
+                        }
+                    }
+                    writtenPaths.add(pathToWrite)
+                }
+                zipEntry = zis.getNextEntry();
+            }
+            zis.closeEntry();
+        }
+        return writtenPaths
     }
 }

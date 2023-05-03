@@ -1,10 +1,16 @@
 package gov.cdc.dex.csv.functions
 
 import com.microsoft.azure.functions.ExecutionContext
-import java.util.logging.Logger;
-import java.time.format.DateTimeFormatter
-import java.time.LocalDateTime
+
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.InputStream
+import java.io.OutputStream
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.logging.Logger;
+
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -16,6 +22,9 @@ import gov.cdc.dex.csv.services.BlobService
 internal class Unit_FnDecompressor {
     companion object{
         private val outputParentDir = File("target/test-output/"+LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSSSS")))
+        private val ingestDir = File("src/test/resources")
+        private val processDir = File(outputParentDir,"process")
+        private val errorDir = File(outputParentDir,"error")
     }
 
     private val mockBlobService : BlobService = Mockito.mock(BlobService::class.java);
@@ -31,6 +40,8 @@ internal class Unit_FnDecompressor {
         
         Mockito.`when`(mockBlobService.doesIngestBlobExist(Mockito.anyString())).thenAnswer(this::doesTestFileExist)
         Mockito.`when`(mockBlobService.copyIngestBlobToProcess(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::copyTestFile)
+        Mockito.`when`(mockBlobService.getProcessBlobInputStream(Mockito.anyString())).thenAnswer(this::openInputStream)
+        Mockito.`when`(mockBlobService.getProcessBlobOutputStream(Mockito.anyString())).thenAnswer(this::openOutputStream)
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,7 +60,7 @@ internal class Unit_FnDecompressor {
 
     @Test
     internal fun happyPath_zip(){
-        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/testfiles/test-upload.zip", contentType="text/zip",id="happy_zip")
+        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/testfiles/test-upload.zip", contentType="application/zip",id="happy_zip")
         var message = buildTestMessage(map);
         
         testFnDebatcher.process(message,mockContext);
@@ -169,7 +180,7 @@ internal class Unit_FnDecompressor {
 
     @Test
     internal fun negative_file_unableToZip(){
-        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/testfiles/test-upload.csv", contentType="text/zip",id="bad_zip")
+        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/testfiles/test-upload.csv", contentType="application/zip",id="bad_zip")
         var message = buildTestMessage(map);
         
         testFnDebatcher.process(message,mockContext);
@@ -179,7 +190,7 @@ internal class Unit_FnDecompressor {
 
     @Test
     internal fun negative_file_emptyZip(){
-        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/testfiles/test-empty.zip", contentType="text/zip",id="empty_zip")
+        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/testfiles/test-empty.zip", contentType="application/zip",id="empty_zip")
         var message = buildTestMessage(map);
         
         testFnDebatcher.process(message,mockContext);
@@ -200,14 +211,14 @@ internal class Unit_FnDecompressor {
 
     private fun loggerInvocation(i: InvocationOnMock){
         val toLog:String = i.getArgument(0);
-        println(toLog);
+        println("[log] $toLog");
         //TODO maybe do something with this in the tests
     }
     
     private fun doesTestFileExist(i: InvocationOnMock):Boolean{
         val relativePath:String = i.getArgument(0);
 
-        var localFile = File("src/test/resources",relativePath);
+        var localFile = File(ingestDir,relativePath);
         return localFile.exists();
     }
     
@@ -217,14 +228,29 @@ internal class Unit_FnDecompressor {
 
         val relativePathOut = outPathPrefix+relativePathIn;
 
-        var localFileIn = File("src/test/resources",relativePathIn);
-        var localFileOut = File(outputParentDir,relativePathOut);
+        var localFileIn = File(ingestDir,relativePathIn);
+        var localFileOut = File(processDir,relativePathOut);
 
         localFileOut.parentFile.mkdirs()
 
         localFileIn.copyTo(localFileOut);
 
         return relativePathOut;
+    }
+    
+    private fun openInputStream(i: InvocationOnMock):InputStream{
+        val relativePath:String = i.getArgument(0);
+
+        var localFile = File(processDir,relativePath);
+        return FileInputStream(localFile);
+    }
+    
+    private fun openOutputStream(i: InvocationOnMock):OutputStream{
+        val relativePath:String = i.getArgument(0);
+
+        var localFile = File(processDir,relativePath);
+        localFile.parentFile.mkdirs();
+        return FileOutputStream(localFile);
     }
 
     private fun defaultMap(id:String = "DUMMY_ID",url:String = "DUMMY_URL", contentType:String = "DUMMY_CONTENT_TYPE"): MutableMap<*,*>{

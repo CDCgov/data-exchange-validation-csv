@@ -5,6 +5,7 @@ import com.azure.storage.blob.BlobContainerClient
 import com.azure.storage.blob.BlobServiceClient
 import com.azure.storage.blob.BlobServiceClientBuilder
 import java.io.InputStream
+import java.io.OutputStream
 
 class AzureBlobServiceImpl(connectionStr: String) :BlobService {
     private val ingestBlobContainer = System.getenv("BlobContainer_Ingest")
@@ -31,5 +32,9 @@ class AzureBlobServiceImpl(connectionStr: String) :BlobService {
         return processedClient.getBlobClient(path).openInputStream();
      }
 
- 
+
+     override fun getProcessBlobOutputStream(path: String): OutputStream {
+        return processedClient.getBlobClient(path).blockBlobClient.getBlobOutputStream();
+     }
+     
 }
