@@ -11,6 +11,7 @@ import gov.cdc.dex.csv.dtos.AzureBlobCreateEventMessage
 import gov.cdc.dex.csv.dtos.ConnectionNames
 import gov.cdc.dex.csv.dtos.DecompressOkEventMessage
 import gov.cdc.dex.csv.dtos.DecompressFailEventMessage
+import gov.cdc.dex.csv.dtos.DecompressParentEventMessage
 
 import java.io.IOException
 import java.io.File
@@ -61,9 +62,15 @@ class FnDecompressor(blobService:BlobService, eventService:EventService, connect
 
                 val (ingestFolder,ingestFileName) = getPathFromUrl(url);
                 val ingestFilePath = ingestFolder+"/"+ingestFileName
+                
                 if(!blobService.doesBlobExist(connectionNames.blobStorage.ingest, ingestFilePath)){
                     throw IllegalArgumentException("File missing in Azure! $url");
                 }
+
+                val metadata = blobService.getBlobMetadata(connectionNames.blobStorage.ingest, ingestFilePath)
+                context.logger.info("File metadata $metadata")
+
+                val parentData = DecompressParentEventMessage(event, metadata)
                 
                 //copy whether unzipping or not, to preserve the zipped file
                 val processFolder = ingestFolder+"/"+id
@@ -76,37 +83,37 @@ class FnDecompressor(blobService:BlobService, eventService:EventService, connect
                         decompressFileStream(downloadStream, processFolder);
                     }catch(e:IOException){
                         context.logger.log(Level.SEVERE, "Error unzipping: $processFilePath", e);
-                        createFailEventAndMoveFile(event, processFilePath, "Error unzipping: $processFilePath : $e.localizedMessage", context);
+                        createFailEventAndMoveFile(parentData, processFilePath, "Error unzipping: $processFilePath : $e.localizedMessage", context);
                         continue;
                     }
 
                     if(writtenPaths.isEmpty()){
-                        createFailEventAndMoveFile(event, processFilePath, "Zipped file was empty: $processFilePath", context);
+                        createFailEventAndMoveFile(parentData, processFilePath, "Zipped file was empty: $processFilePath", context);
                     }else{
-                        createOkEvents(event,writtenPaths, context)
+                        createOkEvents(parentData, writtenPaths, context)
                     }
                 }else{
-                    createOkEvents(event, listOf(processUrl), context)
+                    createOkEvents(parentData, listOf(processUrl), context)
                 }
             }
         }
     }
 
-    private fun createOkEvents(parentEvent:AzureBlobCreateEventMessage, processFilePaths:List<String>, context: ExecutionContext){
+    private fun createOkEvents(parentData:DecompressParentEventMessage, processFilePaths:List<String>, context: ExecutionContext){
         context.logger.info("Decompress OK : "+processFilePaths);
 
         val gson=Gson()
-        var messages = processFilePaths.map{path -> DecompressOkEventMessage(parentEvent, path)}.map{pojo -> gson.toJson(pojo)}
+        var messages = processFilePaths.map{path -> DecompressOkEventMessage(parentData, path)}.map{pojo -> gson.toJson(pojo)}
 
         eventService.sendBatch(connectionNames.eventHubs.decompressOk, messages)
     }
 
-    private fun createFailEventAndMoveFile(parentEvent:AzureBlobCreateEventMessage, processFilePath:String, errorMessage: String, context: ExecutionContext){
+    private fun createFailEventAndMoveFile(parentData:DecompressParentEventMessage, processFilePath:String, errorMessage: String, context: ExecutionContext){
         context.logger.warning("Decompress Fail : $processFilePath : $errorMessage");
 
         blobService.moveBlob(connectionNames.blobStorage.processed, processFilePath, connectionNames.blobStorage.error, processFilePath)
 
-        var pojo = DecompressFailEventMessage(parentEvent, processFilePath,errorMessage)
+        var pojo = DecompressFailEventMessage(parentData, processFilePath,errorMessage)
         var message=Gson().toJson(pojo)
         eventService.sendOne(connectionNames.eventHubs.decompressFail, message)
     }

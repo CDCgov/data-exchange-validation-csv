@@ -46,6 +46,7 @@ internal class Unit_FnDecompressor {
     @BeforeEach
     fun initiateMocks(){
         Mockito.`when`(mockBlobService.doesBlobExist(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::doesTestFileExist)
+        Mockito.`when`(mockBlobService.getBlobMetadata(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::getMetadata)
         Mockito.`when`(mockBlobService.moveBlob(Mockito.anyString(),Mockito.anyString(),Mockito.anyString(),Mockito.anyString())).thenAnswer(this::moveTestFile)
         Mockito.`when`(mockBlobService.getBlobDownloadStream(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::openInputStream)
         Mockito.`when`(mockBlobService.getBlobUploadStream(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::openOutputStream)
@@ -287,6 +288,16 @@ internal class Unit_FnDecompressor {
 
         var localFile = File(File(outputParentDir, container),relativePath);
         return localFile.exists();
+    }
+    
+    private fun getMetadata(i: InvocationOnMock):Map<String,String>{
+        val container:String = i.getArgument(0);
+        val relativePath:String = i.getArgument(1);
+
+        var localFile = File(File(outputParentDir, container),relativePath);
+
+        var meta = mapOf("exists" to ""+localFile.exists(), "filepath" to localFile.absolutePath)
+        return meta;
     }
     
     private fun moveTestFile(i: InvocationOnMock):String{

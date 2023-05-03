@@ -17,6 +17,11 @@ class AzureBlobServiceImpl(connectionStr:String) :BlobService {
         val client = blobServiceClient.getBlobContainerClient(containerName);
         return client.getBlobClient(path).exists()
     }
+    
+    override fun getBlobMetadata(containerName:String, path:String):Map<String,String>{
+        val client = blobServiceClient.getBlobContainerClient(containerName);
+        return client.getBlobClient(path).properties.metadata.mapKeys{it.key.lowercase()}
+    }
      
     override fun moveBlob(fromContainerName:String, fromPath: String, toContainerName:String, toPath: String):String { 
         val fromClient = blobServiceClient.getBlobContainerClient(fromContainerName);
