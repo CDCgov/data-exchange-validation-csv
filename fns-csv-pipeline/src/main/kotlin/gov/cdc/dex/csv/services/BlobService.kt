@@ -5,8 +5,8 @@ import java.io.InputStream
 import java.io.OutputStream
 
 interface BlobService{
-    fun doesIngestBlobExist(path:String):Boolean
-    fun copyIngestBlobToProcess(path:String, processParent:String):String
-    fun getProcessBlobInputStream(path:String):InputStream
-    fun getProcessBlobOutputStream(path:String):OutputStream
+    fun doesBlobExist(containerName:String, path:String):Boolean
+    fun moveBlob(fromContainerName:String, fromPath: String, toContainerName:String, toPath: String)
+    fun getBlobDownloadStream(containerName:String, path:String):InputStream
+    fun getBlobUploadStream(containerName:String, path:String):OutputStream
 }

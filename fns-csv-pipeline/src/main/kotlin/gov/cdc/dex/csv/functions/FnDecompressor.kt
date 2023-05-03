@@ -6,7 +6,9 @@ import com.microsoft.azure.functions.annotation.EventHubTrigger
 import com.microsoft.azure.functions.ExecutionContext
 
 import gov.cdc.dex.csv.services.BlobService
+import gov.cdc.dex.csv.services.EventService
 import gov.cdc.dex.csv.dtos.AzureBlobCreateEventMessage
+import gov.cdc.dex.csv.dtos.ConnectionNames
 
 import java.io.IOException
 import java.io.File
@@ -19,10 +21,13 @@ import java.util.zip.ZipInputStream
 /**
  * Azure Functions with event trigger.
  */
-class FnDecompressor(blobService:BlobService) {
+class FnDecompressor(blobService:BlobService, eventService:EventService, connectionNames:ConnectionNames) {
+    private val blobService = blobService;
+    private val eventService = eventService;
+    private val connectionNames = connectionNames;
+
     private val BLOB_CREATED = "Microsoft.Storage.BlobCreated"
     private val ZIP_TYPE = "application/zip"
-    private val blobService = blobService;
     private val BUFFER_SIZE = 4096
    
     fun process(message: String, context: ExecutionContext) {
@@ -53,59 +58,67 @@ class FnDecompressor(blobService:BlobService) {
                         throw IllegalArgumentException("Azure message missing blob URL!");
                     }
 
-                    val path:String = getPathFromUrl(url);
-                    if(!blobService.doesIngestBlobExist(path)){
+                    val (ingestFolder,ingestFileName) = getPathFromUrl(url);
+                    val ingestFilePath = ingestFolder+"/"+ingestFileName
+                    if(!blobService.doesBlobExist(connectionNames.blobStorage.ingest, ingestFilePath)){
                         throw IllegalArgumentException("File missing in Azure! $url");
                     }
                     
                     //copy whether unzipping or not, to preserve the zipped file
-                    val processPath = blobService.copyIngestBlobToProcess(path,id);
+                    val processFolder = ingestFolder+"/"+id
+                    val processFilePath = processFolder+"/"+ingestFileName
+                    blobService.moveBlob(connectionNames.blobStorage.ingest, ingestFilePath, connectionNames.blobStorage.processed, processFilePath)
 
                     if(type == ZIP_TYPE){
                         var writtenPaths:List<String> = try{
-                            var downloadStream = blobService.getProcessBlobInputStream(processPath);
-                            decompressFileStream(downloadStream, processPath);
+                            var downloadStream = blobService.getBlobDownloadStream(connectionNames.blobStorage.processed, processFilePath)
+                            decompressFileStream(downloadStream, processFilePath);
                         }catch(e:IOException){
-                            context.logger.log(Level.SEVERE, "Error unzipping: $processPath", e);
-                            createFailEventAndMoveFile(event, processPath, "Error unzipping: $processPath : $e.localizedMessage");
+                            context.logger.log(Level.SEVERE, "Error unzipping: $processFilePath", e);
+                            createFailEventAndMoveFile(event, processFilePath, "Error unzipping: $processFilePath : $e.localizedMessage");
                             continue;
                         }
 
                         if(writtenPaths.isEmpty()){
-                            createFailEventAndMoveFile(event, processPath, "Zipped file was empty: $processPath");
+                            createFailEventAndMoveFile(event, processFilePath, "Zipped file was empty: $processFilePath");
                         }else{
                             for(writtenPath in writtenPaths){
                                 createOkEvent(event,writtenPath)
                             }
                         }
                     }else{
-                        createOkEvent(event, processPath)
+                        createOkEvent(event, processFilePath)
                     }
                 }
             }
         }
     }
 
-    private fun createOkEvent(parentEvent:AzureBlobCreateEventMessage, processPath:String){
+    private fun createOkEvent(parentEvent:AzureBlobCreateEventMessage, processFilePath:String){
 
+        //eventService.sendOne(connectionNames.eventHubs.decompressOk, jsonMessage)
     }
 
-    private fun createFailEventAndMoveFile(parentEvent:AzureBlobCreateEventMessage, processPath:String, errorMessage: String){
-        //TODO also move the file from process to error
+    private fun createFailEventAndMoveFile(parentEvent:AzureBlobCreateEventMessage, processFilePath:String, errorMessage: String){
+        blobService.moveBlob(connectionNames.blobStorage.processed, processFilePath, connectionNames.blobStorage.error, processFilePath)
+
 println("\n\n $errorMessage \n\n")
+        //eventService.sendOne(connectionNames.eventHubs.decompressFail, jsonMessage)
     }
 
-    private fun getPathFromUrl(url:String):String{
+    private fun getPathFromUrl(url:String):Pair<String,String>{
         //assume url is formatted "http://domain/container/path/morePath/morePath"
         val urlArray = url.split("/");
         if(urlArray.size < 5){
             throw IllegalArgumentException("Azure message had bad URL for the file! $url");
         }
-        return urlArray.subList(4, urlArray.size).joinToString(separator="/") 
+        var path = urlArray.subList(4, urlArray.size-1).joinToString(separator="/") 
+        var file = urlArray[urlArray.size-1];
+        return Pair(path,file);
     }
 
     private fun decompressFileStream(stream:InputStream, processPath:String):List<String>{
-        val outputPath = processPath.replace(".zip", "/");
+        val outputPath = processPath.replace(".zip","/");
         var writtenPaths : MutableList<String> = mutableListOf();
         ZipInputStream(stream).use{ zis ->
             var zipEntry = zis.nextEntry;
@@ -114,7 +127,7 @@ println("\n\n $errorMessage \n\n")
                 if (!zipEntry.isDirectory()) {
                     // write file content
                     var pathToWrite = outputPath+zipEntry.name
-                    var uploadStream = blobService.getProcessBlobOutputStream(pathToWrite)
+                    var uploadStream = blobService.getBlobUploadStream(connectionNames.blobStorage.processed, pathToWrite)
                     BufferedOutputStream(uploadStream).use{bos ->
                         val bytesIn = ByteArray(BUFFER_SIZE)
                         var read: Int

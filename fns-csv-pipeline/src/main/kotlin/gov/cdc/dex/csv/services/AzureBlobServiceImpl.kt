@@ -7,30 +7,34 @@ import com.azure.storage.blob.BlobServiceClientBuilder
 import java.io.InputStream
 import java.io.OutputStream
 
-class AzureBlobServiceImpl(connectionStr:String, ingestBlobContainer:String, processedBlobContainer:String, errorBlobContainer:String) :BlobService {
+class AzureBlobServiceImpl(connectionStr:String) :BlobService {
     private val blobServiceClient: BlobServiceClient = BlobServiceClientBuilder().connectionString(connectionStr).buildClient();
-    private val ingestClient: BlobContainerClient = blobServiceClient.getBlobContainerClient(ingestBlobContainer);
-    private val processedClient: BlobContainerClient = blobServiceClient.getBlobContainerClient(processedBlobContainer);
-    private val errorClient: BlobContainerClient = blobServiceClient.getBlobContainerClient(errorBlobContainer);
-
-    override fun doesIngestBlobExist(path: String): Boolean {
-        return ingestClient.getBlobClient(path).exists()
+    
+    override fun doesBlobExist(containerName:String, path: String): Boolean {
+        val client = blobServiceClient.getBlobContainerClient(containerName);
+        return client.getBlobClient(path).exists()
     }
- 
-    override fun copyIngestBlobToProcess(path: String, processParent:String):String { 
-        var newPath = processParent+"/"+path;
-        var sourceUrl = ingestClient.getBlobClient(path).getBlobUrl();
-        processedClient.getBlobClient(newPath).blockBlobClient.uploadFromUrl(sourceUrl);
-        return newPath;
+     
+    override fun moveBlob(fromContainerName:String, fromPath: String, toContainerName:String, toPath: String) { 
+        val fromClient = blobServiceClient.getBlobContainerClient(fromContainerName);
+        val toClient = blobServiceClient.getBlobContainerClient(toContainerName);
+
+        val fromBlob = fromClient.getBlobClient(fromPath);
+        val sourceUrl = fromBlob.getBlobUrl();
+        toClient.getBlobClient(toPath).blockBlobClient.uploadFromUrl(sourceUrl);
+        
+        fromBlob.delete()
     }
 
-    override fun getProcessBlobInputStream(path: String): InputStream {
-        return processedClient.getBlobClient(path).openInputStream();
+    override fun getBlobDownloadStream(containerName:String, path: String): InputStream {
+        val client = blobServiceClient.getBlobContainerClient(containerName);
+        return client.getBlobClient(path).openInputStream();
      }
 
 
-     override fun getProcessBlobOutputStream(path: String): OutputStream {
-        return processedClient.getBlobClient(path).blockBlobClient.getBlobOutputStream();
+     override fun getBlobUploadStream(containerName:String, path: String): OutputStream {
+        val client = blobServiceClient.getBlobContainerClient(containerName);
+        return client.getBlobClient(path).blockBlobClient.getBlobOutputStream();
      }
      
 }

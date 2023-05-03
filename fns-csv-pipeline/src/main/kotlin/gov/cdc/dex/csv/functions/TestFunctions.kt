@@ -17,7 +17,7 @@ class TestFunctions {
 	// 		@EventHubTrigger(
     //             name = "msg", 
     //             eventHubName = "%EventHubName_Ingest%",
-    //             connection = "EventHubConnectionListen_Ingest") 
+    //             connection = "EventHubConnection") 
     //     message: String,
     //     context: ExecutionContext
     // ) {
@@ -29,7 +29,7 @@ class TestFunctions {
 			@EventHubTrigger(
                 name = "msg", 
                 eventHubName = "%EventHubName_DecompressOk%",
-                connection = "EventHubConnectionListen_DecompressOk") 
+                connection = "EventHubConnection") 
         message: String,
         context: ExecutionContext
     ) {
@@ -41,7 +41,7 @@ class TestFunctions {
 			@EventHubTrigger(
                 name = "msg", 
                 eventHubName = "%EventHubName_DecompressFail%",
-                connection = "EventHubConnectionListen_DecompressFail") 
+                connection = "EventHubConnection") 
         message: String,
         context: ExecutionContext
     ) {

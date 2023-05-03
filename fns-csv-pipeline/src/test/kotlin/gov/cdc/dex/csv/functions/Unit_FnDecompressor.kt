@@ -18,29 +18,36 @@ import org.mockito.Mockito
 import org.mockito.invocation.InvocationOnMock;
 
 import gov.cdc.dex.csv.services.BlobService
+import gov.cdc.dex.csv.services.EventService
 import gov.cdc.dex.csv.test.utils.*
+import gov.cdc.dex.csv.dtos.ConnectionNames
+import gov.cdc.dex.csv.dtos.EventHubNames
+import gov.cdc.dex.csv.dtos.BlobStorageNames
 
 internal class Unit_FnDecompressor {
     companion object{
         private val outputParentDir = File("target/test-output/"+LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSSSS")))
-        private val ingestDir = File("src/test/resources")
-        private val processDir = File(outputParentDir,"process")
-        private val errorDir = File(outputParentDir,"error")
 
+        private val ingestDir = File(outputParentDir,"ingest");
+        private val processDir = File(outputParentDir,"process");
+        private val errorDir = File(outputParentDir,"error");
+
+        private val blobNames = BlobStorageNames(ingestDir.name, processDir.name, errorDir.name)
+        private val eventHubNames = EventHubNames("ingest", "ok", "fail");
+        private val connectionNames = ConnectionNames(eventHubNames, blobNames);
     }
 
     private val mockContext = mockContext();
     private val mockBlobService : BlobService = Mockito.mock(BlobService::class.java);
-    private val testFnDebatcher : FnDecompressor = FnDecompressor(mockBlobService);
+    private val mockEventService : EventService = Mockito.mock(EventService::class.java);
+    private val testFnDebatcher : FnDecompressor = FnDecompressor(mockBlobService,mockEventService,connectionNames);
+
     @BeforeEach
     fun initiateMocks(){
-        processDir.mkdirs()
-        errorDir.mkdirs()
-
-        Mockito.`when`(mockBlobService.doesIngestBlobExist(Mockito.anyString())).thenAnswer(this::doesTestFileExist)
-        Mockito.`when`(mockBlobService.copyIngestBlobToProcess(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::copyTestFile)
-        Mockito.`when`(mockBlobService.getProcessBlobInputStream(Mockito.anyString())).thenAnswer(this::openInputStream)
-        Mockito.`when`(mockBlobService.getProcessBlobOutputStream(Mockito.anyString())).thenAnswer(this::openOutputStream)
+        Mockito.`when`(mockBlobService.doesBlobExist(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::doesTestFileExist)
+        Mockito.`when`(mockBlobService.moveBlob(Mockito.anyString(),Mockito.anyString(),Mockito.anyString(),Mockito.anyString())).thenAnswer(this::moveTestFile)
+        Mockito.`when`(mockBlobService.getBlobDownloadStream(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::openInputStream)
+        Mockito.`when`(mockBlobService.getBlobUploadStream(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::openOutputStream)
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,22 +56,33 @@ internal class Unit_FnDecompressor {
 
     @Test
     internal fun happyPath_singleCsv(){
-        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/testfiles/test-upload.csv", contentType="text/csv",id="happy_single")
+        copyToIngest("test-upload.csv")
+        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-upload.csv", contentType="text/csv",id="happy_single")
         var message = buildTestMessage(map);
         
         testFnDebatcher.process(message,mockContext);
+
+        Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
+        Assertions.assertTrue(File(processDir,"happy_single/test-upload.csv").exists(), "file not in processed!")
+        Assertions.assertFalse(File(errorDir,"happy_single").exists(), "incorrect error dir created!")
+
         //TODO verify the event was triggered
-        //TODO verify the file is in the directory
     }
 
     @Test
     internal fun happyPath_zip(){
-        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/testfiles/test-upload.zip", contentType="application/zip",id="happy_zip")
+        copyToIngest("test-upload.zip")
+        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-upload.zip", contentType="application/zip",id="happy_zip")
         var message = buildTestMessage(map);
         
         testFnDebatcher.process(message,mockContext);
-        //TODO verify the events were triggered
-        //TODO verify the files are in the directory
+
+        Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
+        Assertions.assertTrue(File(processDir,"happy_zip/test-upload.zip").exists(), "file not in processed!")
+        Assertions.assertTrue(File(processDir,"happy_zip/test-upload/test-upload.csv").exists(), "file not in processed!")
+        Assertions.assertFalse(File(errorDir,"happy_zip").exists(), "incorrect error dir created!")
+
+        //TODO verify the event was triggered
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -179,61 +197,84 @@ internal class Unit_FnDecompressor {
 
     @Test
     internal fun negative_file_unableToZip(){
-        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/testfiles/test-upload.csv", contentType="application/zip",id="bad_zip")
+        copyToIngest("test-upload.csv")
+        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-upload.csv", contentType="application/zip",id="bad_zip")
         var message = buildTestMessage(map);
         
         testFnDebatcher.process(message,mockContext);
+
+        Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
+        Assertions.assertFalse(File(processDir,"bad_zip/test-upload.csv").exists(), "file remained in processed!")
+        Assertions.assertTrue(File(errorDir,"bad_zip/test-upload.csv").exists(), "file not put in error!")
+
         //TODO verify the event was triggered
-        //TODO verify the file is in the directory
     }
 
     @Test
     internal fun negative_file_emptyZip(){
-        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/testfiles/test-empty.zip", contentType="application/zip",id="empty_zip")
+        copyToIngest("test-empty.zip")
+        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-empty.zip", contentType="application/zip",id="empty_zip")
         var message = buildTestMessage(map);
         
         testFnDebatcher.process(message,mockContext);
+
+        Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
+        Assertions.assertFalse(File(processDir,"empty_zip/test-empty.zip").exists(), "file remained in processed!")
+        Assertions.assertTrue(File(errorDir,"empty_zip/test-empty.zip").exists(), "file not put in error!")
+
         //TODO verify the event was triggered
-        //TODO verify the file is in the directory
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //helper functions
 
-    private fun doesTestFileExist(i: InvocationOnMock):Boolean{
-        val relativePath:String = i.getArgument(0);
+    private fun copyToIngest(fileName:String){
+        var localFileIn = File("src/test/resources/testfiles",fileName);
+        var localFileOut = File(ingestDir,fileName);
+        
+        localFileOut.parentFile.mkdirs()
+        localFileIn.copyTo(localFileOut);
+    }
 
-        var localFile = File(ingestDir,relativePath);
+    private fun doesTestFileExist(i: InvocationOnMock):Boolean{
+        val container:String = i.getArgument(0);
+        val relativePath:String = i.getArgument(1);
+
+        var localFile = File(File(outputParentDir, container),relativePath);
         return localFile.exists();
     }
     
-    private fun copyTestFile(i: InvocationOnMock):String{
-        val relativePathIn:String = i.getArgument(0);
-        val outPathPrefix:String = i.getArgument(1);
+    private fun moveTestFile(i: InvocationOnMock):String{
+        val containerIn:String = i.getArgument(0);
+        val relativePathIn:String = i.getArgument(1);
+        val containerOut:String = i.getArgument(2);
+        val relativePathOut:String = i.getArgument(3);
 
-        val relativePathOut = outPathPrefix+relativePathIn;
-
-        var localFileIn = File(ingestDir,relativePathIn);
-        var localFileOut = File(processDir,relativePathOut);
+        var localFileIn = File(File(outputParentDir, containerIn),relativePathIn);
+        var localFileOut = File(File(outputParentDir, containerOut),relativePathOut);
 
         localFileOut.parentFile.mkdirs()
 
         localFileIn.copyTo(localFileOut);
 
+        localFileIn.delete()
+
         return relativePathOut;
     }
     
     private fun openInputStream(i: InvocationOnMock):InputStream{
-        val relativePath:String = i.getArgument(0);
+        val container:String = i.getArgument(0);
+        val relativePath:String = i.getArgument(1);
 
-        var localFile = File(processDir,relativePath);
+        var localFile = File(File(outputParentDir, container),relativePath);
         return FileInputStream(localFile);
     }
     
     private fun openOutputStream(i: InvocationOnMock):OutputStream{
-        val relativePath:String = i.getArgument(0);
+        val container:String = i.getArgument(0);
+        val relativePath:String = i.getArgument(1);
 
-        var localFile = File(processDir,relativePath);
+        var localFile = File(File(outputParentDir, container),relativePath);
         localFile.parentFile.mkdirs();
         return FileOutputStream(localFile);
     }

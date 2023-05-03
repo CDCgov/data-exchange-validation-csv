@@ -17,6 +17,7 @@
         <azure.functions.maven.plugin.version>1.24.0</azure.functions.maven.plugin.version>
         <azure.storage.blob.version>12.19.0</azure.storage.blob.version>
         <azure.functions.java.library.version>2.2.0</azure.functions.java.library.version>
+        <azure.messaging.eventhubs.version>5.14.0</azure.messaging.eventhubs.version>
         
         <gson.version>2.10.1</gson.version>
 		
@@ -43,6 +44,11 @@
             <groupId>com.azure</groupId>
             <artifactId>azure-storage-blob</artifactId>
             <version>${azure.storage.blob.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.azure</groupId>
+            <artifactId>azure-messaging-eventhubs</artifactId>
+            <version>${azure.messaging.eventhubs.version}</version>
         </dependency>
 
         <!-- Misc -->
