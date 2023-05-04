@@ -9,11 +9,12 @@ data class DecompressOkEventMessage (
 
 data class DecompressFailEventMessage (
     @SerializedName("parent")           val parent : DecompressParentEventMessage,
-    @SerializedName("errorPath")        val errorPath : String,
+    @SerializedName("errorPath")        val errorPath : String?,
     @SerializedName("failReason")       val failReason : String
 )
 
 data class DecompressParentEventMessage (
-    @SerializedName("ingestMessage")    val ingestMessage : AzureBlobCreateEventMessage,
-    @SerializedName("parentMetadata")   val parentMetadata : Map<String,String>
+    @SerializedName("rawMessage")       val rawMessage : String? = null,
+    @SerializedName("parsedMessage")    val parsedMessage : Any? = null,
+    @SerializedName("parentMetadata")   val parentMetadata : Map<String,String>? = null
 )

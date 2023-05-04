@@ -10,6 +10,7 @@ data class AzureBlobCreateEventMessage (
 )
 
 data class EvHubData (
-    @SerializedName("contentType")  val contentType       : String?,
-    @SerializedName("url")          val url       : String?
+    @SerializedName("contentType")      val contentType     : String?,
+    @SerializedName("contentLength")    val contentLength   : Int?,
+    @SerializedName("url")              val url             : String?
 )

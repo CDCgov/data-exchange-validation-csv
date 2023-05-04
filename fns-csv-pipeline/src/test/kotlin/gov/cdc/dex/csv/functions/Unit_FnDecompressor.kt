@@ -1,6 +1,7 @@
 package gov.cdc.dex.csv.functions
 
 import com.microsoft.azure.functions.ExecutionContext
+import com.google.gson.Gson
 
 import java.io.File
 import java.io.FileInputStream
@@ -61,6 +62,7 @@ internal class Unit_FnDecompressor {
 
     @Test
     internal fun happyPath_singleCsv(){
+        println("\n\n--START happyPath_singleCsv")
         copyToIngest("test-upload.csv")
         var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-upload.csv", contentType="text/csv",id="happy_single")
         var message = buildTestMessage(map);
@@ -68,17 +70,25 @@ internal class Unit_FnDecompressor {
         testFnDebatcher.process(message,mockContext);
 
         Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
-        Assertions.assertTrue(File(processDir,"happy_single/test-upload.csv").exists(), "file not in processed!")
+        val okFile = File(processDir,"happy_single/test-upload.csv");
+        Assertions.assertTrue(okFile.exists(), "file not put in error!")
         Assertions.assertFalse(File(errorDir,"happy_single").exists(), "incorrect error dir created!")
 
         Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
         var okMessageList = eventMap["ok"]
         Assertions.assertFalse(okMessageList.isNullOrEmpty(), "missing ok message")
         Assertions.assertEquals(1, okMessageList?.size, "too many ok messages")
+        
+        val okObject = Gson().fromJson(okMessageList!!.get(0), com.google.gson.internal.LinkedTreeMap::class.java)
+        Assertions.assertNull((okObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "incorrectly present raw message")
+        Assertions.assertNotNull((okObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "no parsed message")
+        Assertions.assertNotNull((okObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "no parent metadata")
+        Assertions.assertEquals(okFile.absolutePath, okObject["processedPath"])
     }
 
     @Test
     internal fun happyPath_zip(){
+        println("\n\n--START happyPath_zip")
         copyToIngest("test-upload-zip.zip")
         var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-upload-zip.zip", contentType="application/zip",id="happy_zip")
         var message = buildTestMessage(map);
@@ -86,46 +96,83 @@ internal class Unit_FnDecompressor {
         testFnDebatcher.process(message,mockContext);
 
         Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
-        Assertions.assertTrue(File(processDir,"happy_zip/test-upload-zip.zip").exists(), "file not in processed!")
-        Assertions.assertTrue(File(processDir,"happy_zip/test-upload-zip/test-upload-1.csv").exists(), "file not in processed!")
-        Assertions.assertTrue(File(processDir,"happy_zip/test-upload-zip/test-upload-2.csv").exists(), "file not in processed!")
-        Assertions.assertTrue(File(processDir,"happy_zip/test-upload-zip/test-upload-3/test-upload.csv").exists(), "file not in processed!")
-        Assertions.assertTrue(File(processDir,"happy_zip/test-upload-zip/test-upload-inner/test-upload-4.csv").exists(), "file not in processed!")
         Assertions.assertFalse(File(errorDir,"happy_zip").exists(), "incorrect error dir created!")
+        Assertions.assertTrue(File(processDir,"happy_zip/test-upload-zip.zip").exists(), "file not in processed!")
+
+        val okFileList = listOf(
+            File(processDir,"happy_zip/test-upload-zip/test-upload-1.csv"),
+            File(processDir,"happy_zip/test-upload-zip/test-upload-2.csv"),
+            File(processDir,"happy_zip/test-upload-zip/test-upload-3/test-upload.csv"),
+            File(processDir,"happy_zip/test-upload-zip/test-upload-inner/test-upload-4.csv")
+        )
+
+        var okFileStringList:MutableList<String> = mutableListOf()
+        for(okFile in okFileList){
+            Assertions.assertTrue(okFile.exists(), "file not in processed! $okFile")
+            okFileStringList.add(okFile.absolutePath)
+        }
+
 
         Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
         var okMessageList = eventMap["ok"]
         Assertions.assertFalse(okMessageList.isNullOrEmpty(), "missing ok message")
-        Assertions.assertEquals(4, okMessageList?.size, "too many ok messages")
+        Assertions.assertEquals(4, okMessageList?.size, "incorrect number of ok messages")
+
+        for(okMessage in okMessageList!!){
+            val okObject = Gson().fromJson(okMessage, com.google.gson.internal.LinkedTreeMap::class.java)
+            Assertions.assertNull((okObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "incorrectly present raw message")
+            Assertions.assertNotNull((okObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "no parsed message")
+            Assertions.assertNotNull((okObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "no parent metadata")
+
+            Assertions.assertTrue(okFileStringList.remove(okObject["processedPath"]), "bad processed URL ")
+        }
+        
+        Assertions.assertTrue(okFileStringList.isEmpty(), "some URLs not in messages $okFileStringList")
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //bad messages, throw exceptions
+    //bad Azure message
+    //theoretically not possible, but put in just in case Azure changes the format of their messages
 
     @Test
     internal fun negative_message_empty(){
-        val e = Assertions.assertThrows(IllegalArgumentException::class.java) {
-            testFnDebatcher.process("",mockContext);
-        }
-
-        Assertions.assertEquals("Empty message from Azure!", e.message)
+        println("\n\n--START negative_message_empty")
+        testFnDebatcher.process("",mockContext)
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
-        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
+        var failMessageList = eventMap["fail"]
+        Assertions.assertFalse(failMessageList.isNullOrEmpty(), "missing fail message")
+        Assertions.assertEquals(1, failMessageList?.size, "too many fail messages")
+
+        val failObject = Gson().fromJson(failMessageList!!.get(0), com.google.gson.internal.LinkedTreeMap::class.java)
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "no raw message")
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "incorrectly present parsed message")
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "incorrectly present parent metadata")
+        Assertions.assertNull(failObject["errorPath"], "incorrectly present error path")
+        Assertions.assertEquals("Empty Azure message!",failObject["failReason"])
     }
 
     @Test
     internal fun negative_message_badFormat(){
-        Assertions.assertThrows(com.google.gson.JsonSyntaxException::class.java) {
-            testFnDebatcher.process("][",mockContext);
-        }
+        println("\n\n--START negative_message_badFormat")
+        testFnDebatcher.process("][",mockContext);
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
-        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
+        var failMessageList = eventMap["fail"]
+        Assertions.assertFalse(failMessageList.isNullOrEmpty(), "missing fail message")
+        Assertions.assertEquals(1, failMessageList?.size, "too many fail messages")
+
+        val failObject = Gson().fromJson(failMessageList!!.get(0), com.google.gson.internal.LinkedTreeMap::class.java)
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "no raw message")
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "incorrectly present parsed message")
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "incorrectly present parent metadata")
+        Assertions.assertNull(failObject["errorPath"], "incorrectly present error path")
+        Assertions.assertEquals("Azure message unable to be parsed : com.google.gson.JsonSyntaxException: com.google.gson.stream.MalformedJsonException: Unexpected value at line 1 column 2 path $",failObject["failReason"])
     }
 
     @Test
     internal fun negative_message_missingEventType(){
+        println("\n\n--START negative_message_missingEventType")
         var map = defaultMap(id="no_event_type");
         map.remove("eventType");
         var message = buildTestMessage(map);
@@ -138,105 +185,186 @@ internal class Unit_FnDecompressor {
 
     @Test
     internal fun negative_message_missingId(){
+        println("\n\n--START negative_message_missingId")
         var map = defaultMap();
         map.remove("id");
         var message = buildTestMessage(map);
 
-        val e = Assertions.assertThrows(IllegalArgumentException::class.java) {
-            testFnDebatcher.process(message,mockContext);
-        }
-        
-        Assertions.assertEquals("Azure message missing id!", e.message)
+        testFnDebatcher.process(message,mockContext);
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
-        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
+        var failMessageList = eventMap["fail"]
+        Assertions.assertFalse(failMessageList.isNullOrEmpty(), "missing fail message")
+        Assertions.assertEquals(1, failMessageList?.size, "too many fail messages")
+
+        val failObject = Gson().fromJson(failMessageList!!.get(0), com.google.gson.internal.LinkedTreeMap::class.java)
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "incorrectly present raw message")
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "no parsed message")
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "incorrectly present parent metadata")
+        Assertions.assertNull(failObject["errorPath"], "incorrectly present error path")
+        Assertions.assertEquals("Azure ingest event missing required parameters!",failObject["failReason"])
     }
 
     @Test
     internal fun negative_message_missingData(){
+        println("\n\n--START negative_message_missingData")
         var map = defaultMap();
         map.remove("data");
         var message = buildTestMessage(map);
 
-        val e = Assertions.assertThrows(IllegalArgumentException::class.java) {
-            testFnDebatcher.process(message,mockContext);
-        }
-        
-        Assertions.assertEquals("Azure message missing blob content-type!", e.message)
+        testFnDebatcher.process(message,mockContext);
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
-        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
+        var failMessageList = eventMap["fail"]
+        Assertions.assertFalse(failMessageList.isNullOrEmpty(), "missing fail message")
+        Assertions.assertEquals(1, failMessageList?.size, "too many fail messages")
+
+        val failObject = Gson().fromJson(failMessageList!!.get(0), com.google.gson.internal.LinkedTreeMap::class.java)
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "incorrectly present raw message")
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "no parsed message")
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "incorrectly present parent metadata")
+        Assertions.assertNull(failObject["errorPath"], "incorrectly present error path")
+        Assertions.assertEquals("Azure ingest event missing required parameters!",failObject["failReason"])
     }
 
     @Test
     internal fun negative_message_missingContentType(){
+        println("\n\n--START negative_message_missingContentType")
         var map = defaultMap();
         var dataMap = map["data"] as MutableMap<*,*>;
         dataMap.remove("contentType");
         var message = buildTestMessage(map);
 
-        val e = Assertions.assertThrows(IllegalArgumentException::class.java) {
-            testFnDebatcher.process(message,mockContext);
-        }
-        
-        Assertions.assertEquals("Azure message missing blob content-type!", e.message)
+        testFnDebatcher.process(message,mockContext);
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
-        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
+        var failMessageList = eventMap["fail"]
+        Assertions.assertFalse(failMessageList.isNullOrEmpty(), "missing fail message")
+        Assertions.assertEquals(1, failMessageList?.size, "too many fail messages")
+
+        val failObject = Gson().fromJson(failMessageList!!.get(0), com.google.gson.internal.LinkedTreeMap::class.java)
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "incorrectly present raw message")
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "no parsed message")
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "incorrectly present parent metadata")
+        Assertions.assertNull(failObject["errorPath"], "incorrectly present error path")
+        Assertions.assertEquals("Azure ingest event missing required parameters!",failObject["failReason"])
     }
 
     @Test
     internal fun negative_message_missingUrl(){
+        println("\n\n--START negative_message_missingUrl")
         var map = defaultMap();
         var dataMap = map["data"] as MutableMap<*,*>;
         dataMap.remove("url");
         var message = buildTestMessage(map);
 
-        val e = Assertions.assertThrows(IllegalArgumentException::class.java) {
-            testFnDebatcher.process(message,mockContext);
-        }
-        
-        Assertions.assertEquals("Azure message missing blob URL!", e.message)
+        testFnDebatcher.process(message,mockContext);
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
-        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
+        var failMessageList = eventMap["fail"]
+        Assertions.assertFalse(failMessageList.isNullOrEmpty(), "missing fail message")
+        Assertions.assertEquals(1, failMessageList?.size, "too many fail messages")
+
+        val failObject = Gson().fromJson(failMessageList!!.get(0), com.google.gson.internal.LinkedTreeMap::class.java)
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "incorrectly present raw message")
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "no parsed message")
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "incorrectly present parent metadata")
+        Assertions.assertNull(failObject["errorPath"], "incorrectly present error path")
+        Assertions.assertEquals("Azure ingest event missing required parameters!",failObject["failReason"])
+    }
+
+    @Test
+    internal fun negative_message_missingContentLength(){
+        println("\n\n--START negative_message_missingContentLength")
+        var map = defaultMap();
+        var dataMap = map["data"] as MutableMap<*,*>;
+        dataMap.remove("contentLength");
+        var message = buildTestMessage(map);
+
+        testFnDebatcher.process(message,mockContext);
+        
+        Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
+        var failMessageList = eventMap["fail"]
+        Assertions.assertFalse(failMessageList.isNullOrEmpty(), "missing fail message")
+        Assertions.assertEquals(1, failMessageList?.size, "too many fail messages")
+
+        val failObject = Gson().fromJson(failMessageList!!.get(0), com.google.gson.internal.LinkedTreeMap::class.java)
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "incorrectly present raw message")
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "no parsed message")
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "incorrectly present parent metadata")
+        Assertions.assertNull(failObject["errorPath"], "incorrectly present error path")
+        Assertions.assertEquals("Azure ingest event missing required parameters!",failObject["failReason"])
+    }
+
+    @Test
+    internal fun negative_message_badContentLength(){
+        println("\n\n--START negative_message_badContentLength")
+        var map = defaultMap(contentLength="DUMMY_CONTENT_LENGTH");
+        var message = buildTestMessage(map);
+
+        testFnDebatcher.process(message,mockContext);
+        
+        Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
+        var failMessageList = eventMap["fail"]
+        Assertions.assertFalse(failMessageList.isNullOrEmpty(), "missing fail message")
+        Assertions.assertEquals(1, failMessageList?.size, "too many fail messages")
+
+        val failObject = Gson().fromJson(failMessageList!!.get(0), com.google.gson.internal.LinkedTreeMap::class.java)
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "no raw message")
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "incorrectly present parsed message")
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "incorrectly present parent metadata")
+        Assertions.assertNull(failObject["errorPath"], "incorrectly present error path")
+        Assertions.assertEquals("Azure message unable to be parsed : com.google.gson.JsonSyntaxException: java.lang.NumberFormatException: For input string: \"DUMMY_CONTENT_LENGTH\"",failObject["failReason"])
     }
 
     @Test
     internal fun negative_message_badUrl(){
+        println("\n\n--START negative_message_badUrl")
         var map = defaultMap();
         var message = buildTestMessage(map);
 
-        val e = Assertions.assertThrows(IllegalArgumentException::class.java) {
-            testFnDebatcher.process(message,mockContext);
-        }
-        
-        Assertions.assertEquals("Azure message had bad URL for the file! DUMMY_URL", e.message)
+        testFnDebatcher.process(message,mockContext);
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
-        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
+        var failMessageList = eventMap["fail"]
+        Assertions.assertFalse(failMessageList.isNullOrEmpty(), "missing fail message")
+        Assertions.assertEquals(1, failMessageList?.size, "too many fail messages")
+
+        val failObject = Gson().fromJson(failMessageList!!.get(0), com.google.gson.internal.LinkedTreeMap::class.java)
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "incorrectly present raw message")
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "no parsed message")
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "incorrectly present parent metadata")
+        Assertions.assertNull(failObject["errorPath"], "incorrectly present error path")
+        Assertions.assertEquals("Asure event had bad URL for the file! DUMMY_URL",failObject["failReason"])
     }
 
     @Test
     internal fun negative_file_missingFile(){
+        println("\n\n--START negative_file_missingFile")
         var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-not-there")
         var message = buildTestMessage(map);
-        
-        val e = Assertions.assertThrows(IllegalArgumentException::class.java) {
-            testFnDebatcher.process(message,mockContext);
-        }
-        
-        Assertions.assertEquals("File missing in Azure! DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-not-there", e.message)
+
+        testFnDebatcher.process(message,mockContext);
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
-        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
+        var failMessageList = eventMap["fail"]
+        Assertions.assertFalse(failMessageList.isNullOrEmpty(), "missing fail message")
+        Assertions.assertEquals(1, failMessageList?.size, "too many fail messages")
+
+        val failObject = Gson().fromJson(failMessageList!!.get(0), com.google.gson.internal.LinkedTreeMap::class.java)
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "incorrectly present raw message")
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "no parsed message")
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "incorrectly present parent metadata")
+        Assertions.assertNull(failObject["errorPath"], "incorrectly present error path")
+        Assertions.assertEquals("File missing in Azure! DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-not-there",failObject["failReason"])
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //bad file, create fail message
+    //bad file
 
     @Test
     internal fun negative_file_unableToZip(){
+        println("\n\n--START negative_file_unableToZip")
         copyToIngest("test-upload.csv")
         var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-upload.csv", contentType="application/zip",id="bad_zip")
         var message = buildTestMessage(map);
@@ -245,16 +373,25 @@ internal class Unit_FnDecompressor {
 
         Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
         Assertions.assertFalse(File(processDir,"bad_zip/test-upload.csv").exists(), "file remained in processed!")
-        Assertions.assertTrue(File(errorDir,"bad_zip/test-upload.csv").exists(), "file not put in error!")
+        val errorFile = File(errorDir,"bad_zip/test-upload.csv");
+        Assertions.assertTrue(errorFile.exists(), "file not put in error!")
 
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
         var failMessageList = eventMap["fail"]
         Assertions.assertFalse(failMessageList.isNullOrEmpty(), "missing fail message")
         Assertions.assertEquals(1, failMessageList?.size, "too many fail messages")
+
+        val failObject = Gson().fromJson(failMessageList!!.get(0), com.google.gson.internal.LinkedTreeMap::class.java)
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "incorrectly present raw message")
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "no parsed message")
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "no parent metadata")
+        Assertions.assertEquals(errorFile.absolutePath, failObject["errorPath"])
+        Assertions.assertEquals("Zipped file was empty: bad_zip//test-upload.csv",failObject["failReason"])
     }
 
     @Test
     internal fun negative_file_emptyZip(){
+        println("\n\n--START negative_file_emptyZip")
         copyToIngest("test-empty.zip")
         var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-empty.zip", contentType="application/zip",id="empty_zip")
         var message = buildTestMessage(map);
@@ -263,12 +400,20 @@ internal class Unit_FnDecompressor {
 
         Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
         Assertions.assertFalse(File(processDir,"empty_zip/test-empty.zip").exists(), "file remained in processed!")
-        Assertions.assertTrue(File(errorDir,"empty_zip/test-empty.zip").exists(), "file not put in error!")
+        val errorFile = File(errorDir,"empty_zip/test-empty.zip");
+        Assertions.assertTrue(errorFile.exists(), "file not put in error!")
 
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
         var failMessageList = eventMap["fail"]
         Assertions.assertFalse(failMessageList.isNullOrEmpty(), "missing fail message")
         Assertions.assertEquals(1, failMessageList?.size, "too many fail messages")
+
+        val failObject = Gson().fromJson(failMessageList!!.get(0), com.google.gson.internal.LinkedTreeMap::class.java)
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "incorrectly present raw message")
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "no parsed message")
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "no parent metadata")
+        Assertions.assertEquals(errorFile.absolutePath, failObject["errorPath"])
+        Assertions.assertEquals("Zipped file was empty: empty_zip//test-empty.zip",failObject["failReason"])
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -360,8 +505,8 @@ internal class Unit_FnDecompressor {
     }
 
     
-    fun defaultMap(id:String = "DUMMY_ID",url:String = "DUMMY_URL", contentType:String = "DUMMY_CONTENT_TYPE"): MutableMap<*,*>{
-        val mapData = mutableMapOf("url" to url, "contentType" to contentType, "extraField" to "DUMMY_EXTRA_FIELD");
+    fun defaultMap(id:String = "DUMMY_ID",url:String = "DUMMY_URL", contentType:String = "DUMMY_CONTENT_TYPE", contentLength:Any = 0): MutableMap<*,*>{
+        val mapData = mutableMapOf("url" to url, "contentType" to contentType, "contentLength" to contentLength, "extraField" to "DUMMY_EXTRA_FIELD");
         return mutableMapOf("eventType" to "Microsoft.Storage.BlobCreated", "id" to id, "data" to mapData, "extraField" to "DUMMY_EXTRA_FIELD");
     }
 
@@ -372,7 +517,7 @@ internal class Unit_FnDecompressor {
 
     private fun recursiveBuildMessageFromMap(map:Map<*,*>):String{
         return map.map { (k,v)-> 
-            var value = if(v is Map<*,*>){recursiveBuildMessageFromMap(v)}else{"\"$v\""};
+            var value = if(v is Map<*,*>){recursiveBuildMessageFromMap(v)}else if(v is String){"\"$v\""}else{"$v"};
             var combined="\"$k\":$value";
             combined
         }
