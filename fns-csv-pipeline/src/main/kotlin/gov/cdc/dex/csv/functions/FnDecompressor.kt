@@ -15,6 +15,7 @@ import gov.cdc.dex.csv.dtos.ConnectionNames
 import gov.cdc.dex.csv.dtos.DecompressOkEventMessage
 import gov.cdc.dex.csv.dtos.DecompressFailEventMessage
 import gov.cdc.dex.csv.dtos.DecompressParentEventMessage
+import gov.cdc.dex.csv.dtos.DecompressorContext
 
 import java.io.IOException
 import java.io.File
@@ -27,21 +28,16 @@ import java.util.zip.ZipInputStream
 /**
  * Azure Functions with event trigger.
  */
-class FnDecompressor(blobService:BlobService, eventService:EventService, connectionNames:ConnectionNames) {
-    private val blobService = blobService;
-    private val eventService = eventService;
-    private val connectionNames = connectionNames;
+class FnDecompressor(context: DecompressorContext) {
+    private val blobService = context.blobService;
+    private val eventService = context.eventService;
+    private val connectionNames = context.connectionNames;
+    private val requiredMetadataFields = context.requiredMetadataFields.lowercase().split(",")
 
     private val BUFFER_SIZE = 4096
     private val BLOB_CREATED = "Microsoft.Storage.BlobCreated"
     private val ZIP_TYPES = listOf("application/zip","application/x-zip-compressed")
     private val gson = GsonBuilder().setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE).create()
-    
-    //TODO: currently can't figure out how to add metadata to test files in Azure.
-    // Thus, if this is turned on, all tests in Azure will fail
-    // Once that is figure out, turn this back on
-    // private val METADATA_TO_VALIDATE = listOf("jurisdiction")
-    private val METADATA_TO_VALIDATE:List<String> = listOf()
     
     fun process(message: String, context: ExecutionContext) {
         context.logger.info("Decompressor function triggered with message $message")
@@ -187,8 +183,8 @@ class FnDecompressor(blobService:BlobService, eventService:EventService, connect
 
     private fun validateMetadata(metadata: Map<String,String>):String?{
         val missingKeys:MutableList<String> = mutableListOf();
-        for(key in METADATA_TO_VALIDATE){
-            if(metadata[key].isNullOrBlank()){
+        for(key in requiredMetadataFields){
+            if(!key.isNullOrBlank() && metadata[key].isNullOrBlank()){
                 missingKeys.add(key)
             }
         }

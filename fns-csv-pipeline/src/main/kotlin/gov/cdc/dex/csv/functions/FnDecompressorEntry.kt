@@ -9,6 +9,7 @@ import gov.cdc.dex.csv.services.AzureEventServiceImpl
 import gov.cdc.dex.csv.dtos.ConnectionNames
 import gov.cdc.dex.csv.dtos.EventHubNames
 import gov.cdc.dex.csv.dtos.BlobStorageNames
+import gov.cdc.dex.csv.dtos.DecompressorContext
 
 /**
  * Azure Functions with event trigger.
@@ -23,6 +24,8 @@ class FnDecompressorEntry {
     private val ingestEventHub = System.getenv("EventHubName_Ingest")
     private val decompressOkEventHub = System.getenv("EventHubName_DecompressOk")
     private val decompressFailEventHub = System.getenv("EventHubName_DecompressFail")
+    
+    private val requiredMetadataFields = System.getenv("RequiredMetadataFields")
 
     private val blobService = AzureBlobServiceImpl(blobConnection);
     private val eventService = AzureEventServiceImpl(eventNamespaceConnection)
@@ -31,7 +34,7 @@ class FnDecompressorEntry {
     private val eventHubNames = EventHubNames(ingestEventHub, decompressOkEventHub, decompressFailEventHub);
     private val connectionNames = ConnectionNames(eventHubNames, blobNames);
 
-    private val functionMethod = FnDecompressor(blobService,eventService,connectionNames);
+    private val functionMethod = FnDecompressor(DecompressorContext(blobService,eventService,connectionNames, requiredMetadataFields));
 
 
     @FunctionName("DexCsvDecompressor")

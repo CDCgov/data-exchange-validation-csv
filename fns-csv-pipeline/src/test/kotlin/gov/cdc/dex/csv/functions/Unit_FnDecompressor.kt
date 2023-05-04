@@ -23,8 +23,10 @@ import gov.cdc.dex.csv.services.EventService
 import gov.cdc.dex.csv.dtos.ConnectionNames
 import gov.cdc.dex.csv.dtos.EventHubNames
 import gov.cdc.dex.csv.dtos.BlobStorageNames
+import gov.cdc.dex.csv.dtos.DecompressorContext
 
 internal class Unit_FnDecompressor {
+    // in the companion object so it gets initialized once
     companion object{
         private val outputParentDir = File("target/test-output/"+LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSSSS")))
 
@@ -37,24 +39,8 @@ internal class Unit_FnDecompressor {
         private val connectionNames = ConnectionNames(eventHubNames, blobNames);
     }
 
-    private val mockContext = mockContext();
-    private val mockBlobService : BlobService = Mockito.mock(BlobService::class.java);
-    private val mockEventService : EventService = Mockito.mock(EventService::class.java);
-    private val testFnDebatcher : FnDecompressor = FnDecompressor(mockBlobService,mockEventService,connectionNames);
-
+    //not in the companion object so it gets reinitialized every test
     private val eventMap = mutableMapOf<String,MutableList<String>>()
-
-    @BeforeEach
-    fun initiateMocks(){
-        Mockito.`when`(mockBlobService.doesBlobExist(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::doesTestFileExist)
-        Mockito.`when`(mockBlobService.getBlobMetadata(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::getMetadata)
-        Mockito.`when`(mockBlobService.moveBlob(Mockito.anyString(),Mockito.anyString(),Mockito.anyString(),Mockito.anyString())).thenAnswer(this::moveTestFile)
-        Mockito.`when`(mockBlobService.getBlobDownloadStream(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::openInputStream)
-        Mockito.`when`(mockBlobService.getBlobUploadStream(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::openOutputStream)
-
-        Mockito.`when`(mockEventService.sendOne(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::addEvent)
-        Mockito.`when`(mockEventService.sendBatch(Mockito.anyString(),Mockito.anyList())).thenAnswer(this::addEvents)
-    }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //happy path
@@ -67,12 +53,41 @@ internal class Unit_FnDecompressor {
         var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-upload.csv", contentType="text/csv",id="happy_single")
         var message = buildTestMessage(map);
         
-        testFnDebatcher.process(message,mockContext);
+        getDecompressor().process(message,mockContext());
 
         Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
         val okFile = File(processDir,"happy_single/test-upload.csv");
         Assertions.assertTrue(okFile.exists(), "file not put in error!")
         Assertions.assertFalse(File(errorDir,"happy_single").exists(), "incorrect error dir created!")
+
+        Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
+        var okMessageList = eventMap["ok"]
+        Assertions.assertFalse(okMessageList.isNullOrEmpty(), "missing ok message")
+        Assertions.assertEquals(1, okMessageList?.size, "too many ok messages")
+        
+        val okObject = Gson().fromJson(okMessageList!!.get(0), com.google.gson.internal.LinkedTreeMap::class.java)
+        Assertions.assertNull((okObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "incorrectly present raw message")
+        Assertions.assertNotNull((okObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "no parsed message")
+        Assertions.assertNotNull((okObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "no parent metadata")
+        Assertions.assertEquals(okFile.absolutePath, okObject["processedPath"])
+    }
+
+    @Test
+    internal fun happyPath_singleCsvInFolder(){
+        println("\n\n--START happyPath_singleCsvInFolder")
+        copyToIngest("ingest-folder/test-upload.csv")
+        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/ingest-folder/test-upload.csv", contentType="text/csv",id="happy_single_folder")
+        var message = buildTestMessage(map);
+        
+        getDecompressor().process(message,mockContext());
+
+        val ingestInnerFolder = File(ingestDir,"ingest-folder");
+        Assertions.assertTrue(ingestInnerFolder.list().isEmpty(), "ingest file not empty!")
+        ingestInnerFolder.delete()
+        Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
+        val okFile = File(processDir,"happy_single_folder/ingest-folder/test-upload.csv");
+        Assertions.assertTrue(okFile.exists(), "file not put in error!")
+        Assertions.assertFalse(File(errorDir,"happy_single_folder").exists(), "incorrect error dir created!")
 
         Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
         var okMessageList = eventMap["ok"]
@@ -93,7 +108,7 @@ internal class Unit_FnDecompressor {
         var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-upload-zip.zip", contentType="application/zip",id="happy_zip")
         var message = buildTestMessage(map);
         
-        testFnDebatcher.process(message,mockContext);
+        getDecompressor().process(message,mockContext());
 
         Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
         Assertions.assertFalse(File(errorDir,"happy_zip").exists(), "incorrect error dir created!")
@@ -137,7 +152,7 @@ internal class Unit_FnDecompressor {
     @Test
     internal fun negative_message_empty(){
         println("\n\n--START negative_message_empty")
-        testFnDebatcher.process("",mockContext)
+        getDecompressor().process("",mockContext())
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
         var failMessageList = eventMap["fail"]
@@ -155,7 +170,7 @@ internal class Unit_FnDecompressor {
     @Test
     internal fun negative_message_badFormat(){
         println("\n\n--START negative_message_badFormat")
-        testFnDebatcher.process("][",mockContext);
+        getDecompressor().process("][",mockContext());
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
         var failMessageList = eventMap["fail"]
@@ -177,7 +192,7 @@ internal class Unit_FnDecompressor {
         map.remove("eventType");
         var message = buildTestMessage(map);
 
-        testFnDebatcher.process(message,mockContext);
+        getDecompressor().process(message,mockContext());
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
         Assertions.assertTrue(eventMap["fail"].isNullOrEmpty(), "incorrect fail message")
@@ -190,7 +205,7 @@ internal class Unit_FnDecompressor {
         map.remove("id");
         var message = buildTestMessage(map);
 
-        testFnDebatcher.process(message,mockContext);
+        getDecompressor().process(message,mockContext());
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
         var failMessageList = eventMap["fail"]
@@ -212,7 +227,7 @@ internal class Unit_FnDecompressor {
         map.remove("data");
         var message = buildTestMessage(map);
 
-        testFnDebatcher.process(message,mockContext);
+        getDecompressor().process(message,mockContext());
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
         var failMessageList = eventMap["fail"]
@@ -235,7 +250,7 @@ internal class Unit_FnDecompressor {
         dataMap.remove("contentType");
         var message = buildTestMessage(map);
 
-        testFnDebatcher.process(message,mockContext);
+        getDecompressor().process(message,mockContext());
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
         var failMessageList = eventMap["fail"]
@@ -258,7 +273,7 @@ internal class Unit_FnDecompressor {
         dataMap.remove("url");
         var message = buildTestMessage(map);
 
-        testFnDebatcher.process(message,mockContext);
+        getDecompressor().process(message,mockContext());
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
         var failMessageList = eventMap["fail"]
@@ -281,7 +296,7 @@ internal class Unit_FnDecompressor {
         dataMap.remove("contentLength");
         var message = buildTestMessage(map);
 
-        testFnDebatcher.process(message,mockContext);
+        getDecompressor().process(message,mockContext());
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
         var failMessageList = eventMap["fail"]
@@ -302,7 +317,7 @@ internal class Unit_FnDecompressor {
         var map = defaultMap(contentLength="DUMMY_CONTENT_LENGTH");
         var message = buildTestMessage(map);
 
-        testFnDebatcher.process(message,mockContext);
+        getDecompressor().process(message,mockContext());
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
         var failMessageList = eventMap["fail"]
@@ -323,7 +338,7 @@ internal class Unit_FnDecompressor {
         var map = defaultMap();
         var message = buildTestMessage(map);
 
-        testFnDebatcher.process(message,mockContext);
+        getDecompressor().process(message,mockContext());
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
         var failMessageList = eventMap["fail"]
@@ -344,7 +359,7 @@ internal class Unit_FnDecompressor {
         var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-not-there")
         var message = buildTestMessage(map);
 
-        testFnDebatcher.process(message,mockContext);
+        getDecompressor().process(message,mockContext());
         
         Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
         var failMessageList = eventMap["fail"]
@@ -369,7 +384,7 @@ internal class Unit_FnDecompressor {
         var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-upload.csv", contentType="application/zip",id="bad_zip")
         var message = buildTestMessage(map);
         
-        testFnDebatcher.process(message,mockContext);
+        getDecompressor().process(message,mockContext());
 
         Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
         Assertions.assertFalse(File(processDir,"bad_zip/test-upload.csv").exists(), "file remained in processed!")
@@ -396,7 +411,7 @@ internal class Unit_FnDecompressor {
         var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-empty.zip", contentType="application/zip",id="empty_zip")
         var message = buildTestMessage(map);
         
-        testFnDebatcher.process(message,mockContext);
+        getDecompressor().process(message,mockContext());
 
         Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
         Assertions.assertFalse(File(processDir,"empty_zip/test-empty.zip").exists(), "file remained in processed!")
@@ -418,6 +433,29 @@ internal class Unit_FnDecompressor {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //helper functions
+
+
+    
+    private fun getDecompressor():FnDecompressor{
+        val mockBlobService = Mockito.mock(BlobService::class.java)
+        val mockEventService = Mockito.mock(EventService::class.java)
+
+        initiateMocks(mockBlobService,mockEventService)
+        
+        return FnDecompressor(DecompressorContext(mockBlobService,mockEventService,connectionNames,""));
+    }
+
+    private fun initiateMocks(mockBlobService:BlobService,mockEventService:EventService){
+        Mockito.`when`(mockBlobService.doesBlobExist(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::doesTestFileExist)
+        Mockito.`when`(mockBlobService.getBlobMetadata(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::getMetadata)
+        Mockito.`when`(mockBlobService.moveBlob(Mockito.anyString(),Mockito.anyString(),Mockito.anyString(),Mockito.anyString())).thenAnswer(this::moveTestFile)
+        Mockito.`when`(mockBlobService.getBlobDownloadStream(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::openInputStream)
+        Mockito.`when`(mockBlobService.getBlobUploadStream(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::openOutputStream)
+
+        Mockito.`when`(mockEventService.sendOne(Mockito.anyString(),Mockito.anyString())).thenAnswer(this::addEvent)
+        Mockito.`when`(mockEventService.sendBatch(Mockito.anyString(),Mockito.anyList())).thenAnswer(this::addEvents)
+    }
+
 
     private fun copyToIngest(fileName:String){
         var localFileIn = File("src/test/resources/testfiles",fileName);
