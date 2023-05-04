@@ -47,13 +47,13 @@ internal class Unit_FnDecompressor {
     
 
     @Test
-    internal fun happyPath_singleCsv(){
+    internal fun happyPath_singleCsvWithRequiredMetadata(){
         println("\n\n--START happyPath_singleCsv")
         copyToIngest("test-upload.csv")
         var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-upload.csv", contentType="text/csv",id="happy_single")
         var message = buildTestMessage(map);
         
-        getDecompressor().process(message,mockContext());
+        getDecompressor(requiredMetadata="filepath").process(message,mockContext());
 
         Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
         val okFile = File(processDir,"happy_single/test-upload.csv");
@@ -431,18 +431,44 @@ internal class Unit_FnDecompressor {
         Assertions.assertEquals("Zipped file was empty: empty_zip//test-empty.zip",failObject["failReason"])
     }
 
+    @Test
+    internal fun negative_file_missingMetadata(){
+        println("\n\n--START negative_file_missingMetadata")
+        copyToIngest("test-upload.csv")
+        var map = defaultMap(url="DUMMY_HTTP://DUMMY_LOCAL/DUMMY_CONTAINER/test-upload.csv", contentType="text/csv",id="missing_metadata")
+        var message = buildTestMessage(map);
+        
+        getDecompressor(requiredMetadata="DUMMY_METADATA").process(message,mockContext());
+
+        Assertions.assertTrue(ingestDir.list().isEmpty(), "ingest file not empty!")
+        Assertions.assertFalse(File(processDir,"missing_metadata/test-upload.csv").exists(), "file remained in processed!")
+        val errorFile = File(errorDir,"missing_metadata/test-upload.csv");
+        Assertions.assertTrue(errorFile.exists(), "file not put in error!")
+
+        Assertions.assertTrue(eventMap["ok"].isNullOrEmpty(), "incorrect ok message")
+        var failMessageList = eventMap["fail"]
+        Assertions.assertFalse(failMessageList.isNullOrEmpty(), "missing fail message")
+        Assertions.assertEquals(1, failMessageList?.size, "too many fail messages")
+
+        val failObject = Gson().fromJson(failMessageList!!.get(0), com.google.gson.internal.LinkedTreeMap::class.java)
+        Assertions.assertNull((failObject["parent"] as? Map<Any,Any>)?.get("rawMessage"), "incorrectly present raw message")
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("parsedMessage"), "no parsed message")
+        Assertions.assertNotNull((failObject["parent"] as? Map<Any,Any>)?.get("parentMetadata"), "no parent metadata")
+        Assertions.assertEquals(errorFile.absolutePath, failObject["errorPath"])
+        Assertions.assertEquals("Incorrect metadata : Missing required metadata key(s) : [dummy_metadata]",failObject["failReason"])
+    }
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //helper functions
 
-
     
-    private fun getDecompressor():FnDecompressor{
+    private fun getDecompressor(requiredMetadata:String=""):FnDecompressor{
         val mockBlobService = Mockito.mock(BlobService::class.java)
         val mockEventService = Mockito.mock(EventService::class.java)
 
         initiateMocks(mockBlobService,mockEventService)
         
-        return FnDecompressor(DecompressorContext(mockBlobService,mockEventService,connectionNames,""));
+        return FnDecompressor(DecompressorContext(mockBlobService,mockEventService,connectionNames,requiredMetadata));
     }
 
     private fun initiateMocks(mockBlobService:BlobService,mockEventService:EventService){
