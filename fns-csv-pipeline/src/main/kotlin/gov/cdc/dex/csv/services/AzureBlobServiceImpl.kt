@@ -30,6 +30,9 @@ class AzureBlobServiceImpl(connectionStr:String) :BlobService {
         val fromBlob = fromClient.getBlobClient(fromPath);
         val toBlob = toClient.getBlobClient(toPath)
 
+        //TODO there are other Azure functions for copying file, such as fromUrl
+        //however, I had problems getting them to work
+        //it might be worth revisiting down the line
         BufferedInputStream(fromBlob.openInputStream()).use{ fromStream ->
             BufferedOutputStream(toBlob.blockBlobClient.getBlobOutputStream()).use{ toStream ->
                 val bytesIn = ByteArray(BUFFER_SIZE)
