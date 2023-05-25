@@ -1,0 +1,47 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.me</groupId>
+  <artifactId>drools-poc</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  
+	<properties>
+        <java.version>1.8</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+	</properties>
+	
+	  <dependencies>
+		    <dependency>
+		      <groupId>org.drools</groupId>
+		      <artifactId>drools-engine</artifactId>
+		      <version>8.38.0.Final</version>
+		    </dependency>
+		    <dependency>
+		      <groupId>org.drools</groupId>
+		      <artifactId>drools-xml-support</artifactId>
+		      <version>8.38.0.Final</version>
+		    </dependency>
+		    <dependency>
+		      <groupId>org.drools</groupId>
+		      <artifactId>drools-model-compiler</artifactId>
+		      <version>8.38.0.Final</version>
+		    </dependency>
+		    <dependency>
+		      <groupId>org.drools</groupId>
+		      <artifactId>drools-mvel</artifactId>
+		      <version>8.38.0.Final</version>
+		    </dependency>
+<dependency>
+    <groupId>org.apache.commons</groupId>
+    <artifactId>commons-csv</artifactId>
+    <version>1.10.0</version>
+</dependency>
+
+<!-- NOTE: Jackson does not work for large files, does not stream appropriately -->
+<!-- <dependency> -->
+<!--     <groupId>com.fasterxml.jackson.dataformat</groupId> -->
+<!--     <artifactId>jackson-dataformat-csv</artifactId> -->
+<!--     <version>2.13.0</version> -->
+<!-- </dependency> -->
+	</dependencies>
+
+</project>

@@ -1,0 +1,14 @@
+
+# Java related
+*.jar
+*.war
+*.ear
+*.class
+
+# eclipse specific
+*/.project
+*/.classpath
+*/target/**
+*/bin/**
+*/.settings/**
+

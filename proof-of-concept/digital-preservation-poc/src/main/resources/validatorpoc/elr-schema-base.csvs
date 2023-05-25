@@ -1,0 +1,118 @@
+version 1.1
+@totalColumns 101
+@ignoreColumnNameCase
+/*---------------------------
+| some header information	|
+|--------------------------*/
+//START COLUMNS
+patient_id:								notEmpty
+specimen_collection_date_time: 			notEmpty
+//
+testing_lab_accession_number:			if($testing_lab_specimen_id/empty, notEmpty)
+testing_lab_specimen_id:				if($testing_lab_accession_number/empty, notEmpty)
+//
+testing_lab_name:						if($testing_lab_id/empty, notEmpty)
+testing_lab_id:							if($testing_lab_name/empty, notEmpty)
+//
+date_result_released:					if($test_date/empty, notEmpty)
+test_date:								if($date_result_released/empty, notEmpty)
+//
+test_performed_code:					if($test_performed_description/empty, notEmpty)
+test_performed_description:				if($test_performed_code/empty, notEmpty)
+//
+reporting_facility_name:				if($reporting_facility_id/empty, notEmpty)
+reporting_facility_id:					if($reporting_facility_name/empty, notEmpty)
+//
+patient_state:							if($ordering_provider_state/empty and $ordering_facility_state/empty, notEmpty)
+ordering_provider_state:				if($patient_state/empty and $ordering_facility_state/empty, notEmpty)
+ordering_facility_state:				if($patient_state/empty and $ordering_provider_state/empty, notEmpty)
+//
+ordering_provider_last_name:			if($ordering_entity_name/empty and $ordering_facility_name/empty, notEmpty)
+ordering_entity_name:					if($ordering_facility_name/empty and $ordering_provider_last_name/empty, notEmpty)
+ordering_facility_name:					if($ordering_entity_name/empty and $ordering_provider_last_name/empty, notEmpty)
+//
+specimen_type_code:						if($specimen_type_description/empty and $specimen_type_free_text/empty, notEmpty)
+specimen_type_description:				if($specimen_type_code/empty and $specimen_type_free_text/empty, notEmpty)
+specimen_type_free_text:				if($specimen_type_description/empty and $specimen_type_code/empty, notEmpty)
+//
+test_result_coded:						if($test_result_description/empty and $test_result_free_text/empty and $test_result_number/empty, notEmpty)
+test_result_description:				if($test_result_coded/empty and $test_result_free_text/empty and $test_result_number/empty, notEmpty)
+test_result_free_text:					if($test_result_description/empty and $test_result_coded/empty and $test_result_number/empty, notEmpty)
+test_result_number:						if($test_result_description/empty and $test_result_free_text/empty and $test_result_coded/empty, notEmpty)
+//
+patient_id_assigner:
+patient_id_type:
+testing_lab_id_type:
+testing_lab_street_address:
+testing_lab_city:
+testing_lab_state:
+testing_lab_zip_code:
+testing_lab_county:
+submitter_unique_sample_id:
+submitter_sample_id_assigner:
+patient_dob:
+patient_gender:
+patient_race:
+patient_city:
+patient_zip_code:
+patient_county:
+patient_ethnicity:
+patient_death_date:
+patient_death_indicator:
+patient_age:
+patient_age_units:
+first_test:
+illness_onset_date:
+pregnant:
+symptomatic_for_disease:
+hospitalized:
+icu:
+patient_location:
+employed_in_healthcare:
+employed_in_high_risk_setting:
+resident_congregate_setting:
+public_health_case_id:
+patient_occupation:
+disease_symptoms:
+patient_residency_type:
+most_recent_test_type:
+most_recent_test_result:
+most_recent_test_date:
+ordering_provider_id:
+ordering_provider_first_name:
+ordering_provider_street:
+ordering_provider_city:
+ordering_provider_zip_code:
+ordering_provider_county:
+ordering_facility_street:
+ordering_facility_city:
+ordering_facility_zip_code:
+ordering_facility_county:
+ordering_facility_phone_number:
+order_test_date:
+ordered_test_code:
+ordered_test_description:
+ordered_test_code_system:
+order_result_status:
+test_performed_code_system:
+test_result_code_system:
+test_result_comparator:
+test_result_number_separator:
+test_result_number2:
+test_result_units:
+reference_range:
+abnormal_flag:
+test_result_status:
+test_method_description:
+device_type_id_1:
+device_type_id_2:
+device_instance_id_1:
+device_instance_id_2:
+specimen_type_code_system:
+specimen_source_site_code:
+specimen_source_site_descrip:
+specimen_source_site_code_sys:
+specimen_received_date_time:
+csv_file_version_no:
+report_facil_data_source_app:
+file_created_date:

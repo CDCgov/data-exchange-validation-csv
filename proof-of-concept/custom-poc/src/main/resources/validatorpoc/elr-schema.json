@@ -1,0 +1,16 @@
+{
+	"name": "Mock Covid ELR",
+	"validations": [
+		{
+			"key": "Required Fields",
+			"value": ["Patient_ID", "Specimen_collection_date_time"]
+		},
+		{
+			"key": "Conditionally Required Fields",
+			"value": [
+				["Testing_lab_accession_number", "Testing_lab_specimen_ID"],
+				["Testing_lab_name", "Testing_lab_id"]
+			]
+		}
+	]
+}
