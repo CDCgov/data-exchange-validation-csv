@@ -25,7 +25,7 @@ class TestFunctions {
     //     context.logger.info("Ingest Event: "+message)
     // }
 
-    @FunctionName("Test_DecompressOkListener")
+    //@FunctionName("Test_DecompressOkListener")
     fun eventDecompressOk(
 			@EventHubTrigger(
                 cardinality = Cardinality.ONE,
@@ -38,7 +38,7 @@ class TestFunctions {
         context.logger.info("Decompress Ok Event: "+message)
     }
 
-    @FunctionName("Test_DecompressFailListener")
+    //@FunctionName("Test_DecompressFailListener")
     fun eventDecompressFail(
 			@EventHubTrigger(
                 cardinality = Cardinality.ONE,

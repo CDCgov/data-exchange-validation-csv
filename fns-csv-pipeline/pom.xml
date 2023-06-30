@@ -12,13 +12,15 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>11</java.version>
-        <kotlin.version>1.7.20</kotlin.version>
+        <kotlin.version>1.8.21</kotlin.version>
 
         <azure.functions.maven.plugin.version>1.24.0</azure.functions.maven.plugin.version>
-        <azure.storage.blob.version>12.19.0</azure.storage.blob.version>
-        <azure.functions.java.library.version>2.2.0</azure.functions.java.library.version>
+        <azure.storage.blob.version>12.22.2</azure.storage.blob.version>
+        <azure.functions.java.library.version>3.0.0</azure.functions.java.library.version>
         <azure.messaging.eventhubs.version>5.14.0</azure.messaging.eventhubs.version>
+		<durabletask.azure.functions.version>1.1.0</durabletask.azure.functions.version>
         
+		<jackson.module.kotlin.version>2.12.3</jackson.module.kotlin.version>
         <gson.version>2.10.1</gson.version>
 		
         <functionAppName>dex-csv-fn-app</functionAppName>
@@ -40,15 +42,27 @@
             <artifactId>azure-functions-java-library</artifactId>
             <version>${azure.functions.java.library.version}</version>
         </dependency>
+		<dependency>
+			<groupId>com.microsoft</groupId>
+			<artifactId>durabletask-azure-functions</artifactId>
+			<version>${durabletask.azure.functions.version}</version>
+		</dependency>
         <dependency>
             <groupId>com.azure</groupId>
             <artifactId>azure-storage-blob</artifactId>
             <version>${azure.storage.blob.version}</version>
-        </dependency>
+        </dependency> 
         <dependency>
             <groupId>com.azure</groupId>
             <artifactId>azure-messaging-eventhubs</artifactId>
             <version>${azure.messaging.eventhubs.version}</version>
+        </dependency>
+
+        <!-- Needed for Azure to function correctly -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.module</groupId>
+            <artifactId>jackson-module-kotlin</artifactId>
+            <version>${jackson.module.kotlin.version}</version>
         </dependency>
 
         <!-- Misc -->
