@@ -1,0 +1,25 @@
+package com.me.drools_poc.drl
+
+import com.me.drools_poc.CSVEntity;
+import com.me.drools_poc.ExternalFunctions;
+
+rule "required patient_id"
+	when
+		record: CSVEntity(get("Patient_ID")==null)
+	then
+		ExternalFunctions.fail(record, "required patient_id");
+end
+
+rule "required specimen_collection_date_time"
+	when
+		record: CSVEntity(get("Specimen_collection_date_time")==null)
+	then
+		ExternalFunctions.fail(record, "required specimen_collection_date_time");
+end
+
+rule "conditionally required testing_lab_accession_number || testing_lab_specimen_id"
+	when
+		record: CSVEntity(get("Testing_lab_accession_number")==null && get("Testing_lab_specimen_ID")==null)
+	then
+		ExternalFunctions.fail(record, "conditionally required testing_lab_accession_number || testing_lab_specimen_id");
+end
