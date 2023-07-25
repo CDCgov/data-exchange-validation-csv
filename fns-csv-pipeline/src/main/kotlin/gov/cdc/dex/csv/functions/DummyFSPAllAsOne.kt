@@ -55,24 +55,24 @@ class DummyFSPAllAsOne {
                         orchInputs.add(DumOrchInput(batchSize, numThreads, delayTime, fileUrl, LocalDateTime.now().toString()))
                     }
                 }
-                // fileUrl = "https://dexcsvdata001.blob.core.windows.net/testing/orchestrator-split-poc/test-upload-mid.csv"
-                // for(batchSize in listOf(1,100,10000)){
-                //     for(numThreads in listOf(1,10,100)){
-                //         orchInputs.add(DumOrchInput(batchSize, numThreads, delayTime, fileUrl, LocalDateTime.now().toString()))
-                //     }
-                // }
-                // fileUrl = "https://dexcsvdata001.blob.core.windows.net/testing/orchestrator-split-poc/test-upload-big.csv"
-                // for(batchSize in listOf(100,10000)){
-                //     for(numThreads in listOf(1,10,100)){
-                //         orchInputs.add(DumOrchInput(batchSize, numThreads, delayTime, fileUrl, LocalDateTime.now().toString()))
-                //     }
-                // }
-                // fileUrl = "https://dexcsvdata001.blob.core.windows.net/testing/orchestrator-split-poc/test-upload-bigger.csv"
-                // for(batchSize in listOf(10000)){
-                //     for(numThreads in listOf(10,100)){
-                //         orchInputs.add(DumOrchInput(batchSize, numThreads, delayTime, fileUrl, LocalDateTime.now().toString()))
-                //     }
-                // }
+                fileUrl = "https://dexcsvdata001.blob.core.windows.net/testing/orchestrator-split-poc/test-upload-mid.csv"
+                for(batchSize in listOf(1,100,10000)){
+                    for(numThreads in listOf(1,10,100)){
+                        orchInputs.add(DumOrchInput(batchSize, numThreads, delayTime, fileUrl, LocalDateTime.now().toString()))
+                    }
+                }
+                fileUrl = "https://dexcsvdata001.blob.core.windows.net/testing/orchestrator-split-poc/test-upload-big.csv"
+                for(batchSize in listOf(100,10000)){
+                    for(numThreads in listOf(1,10,100)){
+                        orchInputs.add(DumOrchInput(batchSize, numThreads, delayTime, fileUrl, LocalDateTime.now().toString()))
+                    }
+                }
+                fileUrl = "https://dexcsvdata001.blob.core.windows.net/testing/orchestrator-split-poc/test-upload-bigger.csv"
+                for(batchSize in listOf(10000)){
+                    for(numThreads in listOf(10,100)){
+                        orchInputs.add(DumOrchInput(batchSize, numThreads, delayTime, fileUrl, LocalDateTime.now().toString()))
+                    }
+                }
             }
 
             val bodyList = mutableListOf<ResponseBodyItem>()
