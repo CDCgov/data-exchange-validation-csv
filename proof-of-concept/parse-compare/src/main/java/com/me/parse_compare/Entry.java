@@ -44,7 +44,8 @@ public class Entry {
 		try {
 			final JsonSchema schema = getTestSchema();
 			final File testFile = getTestFile();
-			final Output output = run(testFile, schema);
+//			final Output output = run(testFile, schema);
+			final Output output = runNoBatching(testFile, schema);
 			
 			System.out.println(MAPPER.writeValueAsString(output));
 		} catch(final Throwable e) {
@@ -76,6 +77,26 @@ public class Entry {
 		return new File("C:\\automation\\NOT-AUTO\\test-upload-big.csv");
 	}
 
+	private static Output runNoBatching(final File testFile, JsonSchema schema)
+			throws IOException, InterruptedException, ExecutionException {
+		System.out.println("START");
+		final LocalDateTime start = LocalDateTime.now();
+
+		try(BufferedReader reader = Files.newBufferedReader(testFile.toPath())) {
+			MappingIterator<Map<String, String>> mappingIterator = PARSER.readValues(reader);
+			while(mappingIterator.hasNext()) {
+				Map<String, String> row = mappingIterator.next();
+				JsonNode node = MAPPER.valueToTree(row);
+				
+				Set<ValidationMessage> errors = schema.validate(node);
+			}
+		}
+		final LocalDateTime end = LocalDateTime.now();
+		long runTime=ChronoUnit.MILLIS.between(start,end);
+
+		return new Output(runTime, null, null, null, null, null, null);
+	}
+	
 	private static Output run(final File testFile, JsonSchema schema)
 			throws IOException, InterruptedException, ExecutionException {
 		System.out.println("START");
