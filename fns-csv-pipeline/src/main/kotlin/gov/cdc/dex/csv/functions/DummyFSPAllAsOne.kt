@@ -48,28 +48,33 @@ class DummyFSPAllAsOne {
             context.logger.log(Level.INFO,"Dummy_Multi_Router started")
 
             val orchInputs = mutableListOf<DumOrchInput>()
-            for(delayTime in listOf(0,1000,10000)){
-                var fileUrl = "https://dexcsvdata001.blob.core.windows.net/testing/orchestrator-split-poc/test-upload-small.csv"
-                for(batchSize in listOf(1,100)){
-                    for(numThreads in listOf(1,10)){
-                        orchInputs.add(DumOrchInput(batchSize, numThreads, delayTime, fileUrl, LocalDateTime.now().toString()))
-                    }
-                }
-                fileUrl = "https://dexcsvdata001.blob.core.windows.net/testing/orchestrator-split-poc/test-upload-mid.csv"
-                for(batchSize in listOf(1,100,10000)){
-                    for(numThreads in listOf(1,10,100)){
-                        orchInputs.add(DumOrchInput(batchSize, numThreads, delayTime, fileUrl, LocalDateTime.now().toString()))
-                    }
-                }
-                fileUrl = "https://dexcsvdata001.blob.core.windows.net/testing/orchestrator-split-poc/test-upload-big.csv"
-                for(batchSize in listOf(100,10000)){
-                    for(numThreads in listOf(1,10,100)){
+            for(delayTime in listOf(0)){
+                // for(delayTime in listOf(0 ,1000,10000)){
+                // var fileUrl = "https://dexcsvdata001.blob.core.windows.net/testing/orchestrator-split-poc/test-upload-small.csv"
+                // for(batchSize in listOf(1,100)){
+                //     for(numThreads in listOf(1,10)){
+                //         orchInputs.add(DumOrchInput(batchSize, numThreads, delayTime, fileUrl, LocalDateTime.now().toString()))
+                //     }
+                // }
+                // fileUrl = "https://dexcsvdata001.blob.core.windows.net/testing/orchestrator-split-poc/test-upload-mid.csv"
+                // for(batchSize in listOf(1,100,10000)){
+                //     for(numThreads in listOf(1,10,100)){
+                //         orchInputs.add(DumOrchInput(batchSize, numThreads, delayTime, fileUrl, LocalDateTime.now().toString()))
+                //     }
+                // }
+                var fileUrl = "https://dexcsvdata001.blob.core.windows.net/testing/orchestrator-split-poc/test-upload-big.csv"
+                for(batchSize in listOf(1000)){
+                    for(numThreads in listOf(100)){
+                        // for(batchSize in listOf(100,10000)){
+                        //     for(numThreads in listOf(1,10,100)){
                         orchInputs.add(DumOrchInput(batchSize, numThreads, delayTime, fileUrl, LocalDateTime.now().toString()))
                     }
                 }
                 fileUrl = "https://dexcsvdata001.blob.core.windows.net/testing/orchestrator-split-poc/test-upload-bigger.csv"
-                for(batchSize in listOf(10000)){
-                    for(numThreads in listOf(10,100)){
+                for(batchSize in listOf(1000)){
+                    for(numThreads in listOf(100)){
+                        // for(batchSize in listOf(10000)){
+                        //     for(numThreads in listOf(10,100)){
                         orchInputs.add(DumOrchInput(batchSize, numThreads, delayTime, fileUrl, LocalDateTime.now().toString()))
                     }
                 }
