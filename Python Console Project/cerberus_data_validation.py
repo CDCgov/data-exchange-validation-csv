@@ -47,34 +47,34 @@ schema = {
 #print(df_dict)
 
 filename = "data/input/row_validation_5GB.csv"
-report = validate(filename)
-pprint(report.flatten(["rowNumber", "fieldNumber", "type"]))
+#report = validate(filename)
+#pprint(report.flatten(["rowNumber", "fieldNumber", "type"]))
 
-print(f"Validation Report for file {filename}")
+#print(f"Validation Report for file {filename}")
 
-if (report.flatten(["rowNumber", "fieldNumber", "type"])) == []:
-    print("Generic CSV Validation is successful")
+#if (report.flatten(["rowNumber", "fieldNumber", "type"])) == []:
+#    print("Generic CSV Validation is successful")
 
-    df = pd.read_csv(filename, keep_default_na = False)
+df = pd.read_csv(filename, keep_default_na = False)
     
-    if df.empty:
-        print("File Validation failed: File is empty except header row")
-    else: 
+if df.empty:
+    print("File Validation failed: File is empty except header row")
+else: 
     
-        df["Patient_ID"] = df["Patient_ID"].astype(int)
-        df["Speciman_collection_date_time"] = df["Speciman_collection_date_time"].astype("int")
+#    df["Patient_ID"] = df["Patient_ID"].astype(int)
+#    df["Speciman_collection_date_time"] = df["Speciman_collection_date_time"].astype("int")
         
         
         #df = df.fillna('')
             
-        data_dict = df.to_dict(orient='records')
+    data_dict = df.to_dict(orient='records')
         
         ##pprint(data_dict)
         
-        validate_dict(data_dict, schema)
+    validate_dict(data_dict, schema)
     
-else :
-    print ("File Read error")
+#else :
+#    print ("File Read error")
     
 current_time = datetime.datetime.now()
 

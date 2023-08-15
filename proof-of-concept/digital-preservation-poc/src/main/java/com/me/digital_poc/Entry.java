@@ -18,6 +18,7 @@ import org.apache.commons.io.FilenameUtils;
 
 import uk.gov.nationalarchives.csv.validator.api.java.CsvValidator;
 import uk.gov.nationalarchives.csv.validator.api.java.FailMessage;
+import uk.gov.nationalarchives.csv.validator.api.java.Substitution;
 
 public class Entry {
 
@@ -34,7 +35,7 @@ public class Entry {
 
 			System.out.println("Start validate");
 			final LocalDateTime validateStart = LocalDateTime.now();
-			final List<FailMessage> messages = CsvValidator.validate(csvFilename, tempSchema, false, new ArrayList<>(), true, false);
+			final List<FailMessage> messages = CsvValidator.validate(csvFilename, tempSchema, false, new ArrayList<Substitution>(), true, false);
 			final LocalDateTime validateEnd = LocalDateTime.now();
 			System.out.println("End validate, milliseconds " + ChronoUnit.MILLIS.between(validateStart, validateEnd));
 
