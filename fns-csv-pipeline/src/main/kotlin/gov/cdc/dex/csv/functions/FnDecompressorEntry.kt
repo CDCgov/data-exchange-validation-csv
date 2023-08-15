@@ -37,7 +37,7 @@ class FnDecompressorEntry {
 /**
  * Azure Functions with event trigger.
  */
-    @FunctionName("DexCsvDecompressor")
+    //@FunctionName("DexCsvDecompressor")
     fun eventHubProcessor(
 			@EventHubTrigger(
                 cardinality = Cardinality.ONE,
