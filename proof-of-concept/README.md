@@ -60,6 +60,7 @@ Machine Specs:​
 * Processor - Intel(R) Core(TM) i7-10850H CPU @ 2.70GHz   2.71 GHz​
 * RAM - 32 GB​
 * OS - Windows 10, 64-bit​
+
 | Tool​                                                         | POC Test​                                         | Run Time   |
 | ---                                                          | ---                                              | ---        |
 | JVM Digital Preservation​                                     | 1 GB file <br> Required and conditionally fields ​| 3 minutes​​​  |
@@ -79,6 +80,7 @@ Test Description
 * streamed entire file into tool, then iterated and chunked
 * only validation performed is ability to parse the file as CSV
 * no multithreading
+
 | Tool​                   | Run Time    |
 | ---                    | ---         |
 | JVM Jackson CSV​        | 46 seconds​  |
