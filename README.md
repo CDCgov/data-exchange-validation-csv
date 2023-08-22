@@ -2,9 +2,9 @@
 
 A repository for the CDC data exchange building block CSV.
 
-* Deprecated draft of CSV Pipeline: [fns-csv-pipeline](https://github.com/CDCgov/data-exchange-validation-csv/tree/master/fns-csv-pipeline)
+* Deprecated draft of CSV Pipeline: [fns-csv-pipeline](fns-csv-pipeline)
 * Current draft can be found at [nonhl7-orchestration](https://github.com/CDCgov/data-exchange-routing/tree/master/nonhl7-orchestration)
-* Proof of Concepts for determining validation tool: [proof-of-concept](https://github.com/CDCgov/data-exchange-validation-csv/tree/master/proof-of-concept)
+* Proof of Concepts for determining validation tool: [proof-of-concept](proof-of-concept)
 
 
 # CDCgov GitHub Organization Open Source Project Template
